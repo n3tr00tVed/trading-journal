@@ -864,3 +864,41 @@ button {
 .calc-note {
   margin-top: var(--space-4);
 }
+
+/* ---- Market switch (sidebar dropdown) ---- */
+
+.market-switch {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-4) 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.market-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.market-select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 150ms;
+}
+
+.market-select:hover {
+  border-color: var(--accent);
+}
+
+.market-select:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
+}

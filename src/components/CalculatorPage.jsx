@@ -15,6 +15,7 @@ import { useCurrency } from '../hooks/useCurrency.js';
  */
 export default function CalculatorPage({ capital = null }) {
   const { currency } = useCurrency();
+  const symbol = currency === 'INR' ? '₹' : '$';
   const [inputs, setInputs] = useState({
     capital: capital == null ? '' : String(capital),
     riskPercent: '1',
@@ -86,7 +87,7 @@ export default function CalculatorPage({ capital = null }) {
       <form className="card calc-form" onSubmit={(event) => event.preventDefault()} noValidate>
         <div className="calc-grid">
           <div className="field-col">
-            <label htmlFor="calc-capital" className="label">Capital (₹)</label>
+            <label htmlFor="calc-capital" className="label">Capital ({symbol})</label>
             <input id="calc-capital" className="field" type="number" min="0" step="any" inputMode="decimal"
               value={inputs.capital} onChange={set('capital')} placeholder={capital == null ? 'e.g. 25000' : String(capital)} />
           </div>
@@ -103,12 +104,12 @@ export default function CalculatorPage({ capital = null }) {
             </select>
           </div>
           <div className="field-col">
-            <label htmlFor="calc-entry" className="label">Entry price (₹)</label>
+            <label htmlFor="calc-entry" className="label">Entry price ({symbol})</label>
             <input id="calc-entry" className="field" type="number" min="0" step="any" inputMode="decimal"
               value={inputs.entryPrice} onChange={set('entryPrice')} placeholder="e.g. 812.50" />
           </div>
           <div className="field-col">
-            <label htmlFor="calc-stop" className="label">Stop loss (₹)</label>
+            <label htmlFor="calc-stop" className="label">Stop loss ({symbol})</label>
             <input id="calc-stop" className="field" type="number" min="0" step="any" inputMode="decimal"
               value={inputs.stopLoss} onChange={set('stopLoss')} placeholder={inputs.direction === 'long' ? 'below entry' : 'above entry'} />
           </div>

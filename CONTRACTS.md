@@ -83,6 +83,9 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
 
 - `CurrencyContext{ currency, setCurrency }` in `App.jsx`; persisted at
   `trading-journal:settings:v1`. Default `INR`; only `INR`/`USD` accepted.
+- Quick switch lives in the sidebar ("Trading market: India/US"), the
+  Settings card mirrors the same state; the Calculator's price labels and
+  the Trades market filter follow it.
 - `formatCurrency/signedFormatCurrency(value, currency)` take the currency
   explicitly everywhere; INR renders with `en-IN` grouping (₹1,23,456).
 

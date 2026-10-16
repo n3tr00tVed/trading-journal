@@ -90,6 +90,8 @@ function App() {
         onNavigate={navigate}
         total={stats.total}
         openCount={stats.open}
+        currency={currency}
+        onCurrencyChange={changeCurrency}
       />
 
       <main className="main" id="main-content">

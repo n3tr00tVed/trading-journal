@@ -17,6 +17,7 @@ import { computeStats, filterTrades, sortTrades } from '../lib/calculations.js';
 import { signedFormatCurrency } from '../lib/format.js';
 import { useCurrency } from '../hooks/useCurrency.js';
 import EmptyState from './EmptyState.jsx';
+import { MARKETS } from '../lib/schema.js';
 import TradesTable from './TradesTable.jsx';
 
 const DEFAULT_FILTERS = {
@@ -24,9 +25,18 @@ const DEFAULT_FILTERS = {
   symbol: '',
   direction: 'all',
   strategy: 'all',
+  market: 'all',
   status: 'all',
   dateFrom: '',
   dateTo: '',
+};
+
+const MARKET_LABELS = {
+  stocks: 'Stocks',
+  futures: 'Futures',
+  forex: 'Forex',
+  crypto: 'Crypto',
+  options: 'Options',
 };
 
 const DEFAULT_SORT = 'entryDate:desc';
@@ -151,6 +161,20 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete }) {
                 {strategies.map((name) => (
                   <option key={name} value={name}>
                     {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="trades-filter-market">
+                Market
+              </label>
+              <select id="trades-filter-market" value={filters.market} onChange={setFilter('market')}>
+                <option value="all">All markets</option>
+                {MARKETS.map((name) => (
+                  <option key={name} value={name}>
+                    {MARKET_LABELS[name]}
                   </option>
                 ))}
               </select>

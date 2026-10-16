@@ -31,7 +31,11 @@ your own device. No accounts, no servers, nothing leaves your browser.
   capping by both risk and affordability. Lot sizes auto-fill for NSE/BSE
   index and MCX contracts (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
 - **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
-  switch to $ USD any time in Settings.
+  switch between **India (₹ INR)** and **US ($ USD)** markets from the
+  sidebar dropdown (any view) or in Settings.
+- **Trade filters** — filter your journal by market segment (stocks,
+  futures, forex, crypto, options) alongside direction, strategy, status,
+  symbol, and date range.
 
 ## Getting started
 

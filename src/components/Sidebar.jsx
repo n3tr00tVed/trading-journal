@@ -23,7 +23,14 @@ function badgeText(total, openCount) {
   return totalPart;
 }
 
-export default function Sidebar({ view, onNavigate, total = 0, openCount = 0 }) {
+export default function Sidebar({
+  view,
+  onNavigate,
+  total = 0,
+  openCount = 0,
+  currency = 'INR',
+  onCurrencyChange = () => {},
+}) {
   return (
     <nav className="sidebar" aria-label="Primary navigation">
       <div className="brand">
@@ -58,6 +65,20 @@ export default function Sidebar({ view, onNavigate, total = 0, openCount = 0 }) 
           );
         })}
       </ul>
+      <div className="market-switch">
+        <label className="market-label" htmlFor="market-switch">
+          Trading market
+        </label>
+        <select
+          id="market-switch"
+          className="market-select"
+          value={currency}
+          onChange={(event) => onCurrencyChange(event.target.value)}
+        >
+          <option value="INR">🇮🇳 India · ₹ INR</option>
+          <option value="USD">🇺🇸 US · $ USD</option>
+        </select>
+      </div>
       <p className="sidebar-foot">Local-only · your trades never leave this browser.</p>
     </nav>
   );
