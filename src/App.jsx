@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTrades } from './hooks/useTrades.js';
+import { loadCapital, saveCapital } from './lib/capitalStorage.js';
 import Dashboard from './components/Dashboard.jsx';
 import TradesPage from './components/TradesPage.jsx';
 import TradeForm from './components/TradeForm.jsx';
@@ -27,6 +28,7 @@ function App() {
   const [view, setView] = useState('dashboard');
   const [form, setForm] = useState(null); // null | { mode: 'new' } | { mode: 'edit', trade }
   const [toast, setToast] = useState(null); // { message, tone }
+  const [capital, setCapital] = useState(() => loadCapital());
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -58,6 +60,18 @@ function App() {
     if (VIEWS.includes(nextView)) setView(nextView);
   }, []);
 
+  const handleSaveCapital = useCallback((value) => {
+    const saved = saveCapital(value);
+    setCapital(saved ? value : null);
+    if (saved) {
+      setToast({
+        message: value == null ? 'Capital cleared.' : `Capital saved: $${Number(value).toLocaleString('en-US')}.`,
+        tone: 'pos',
+      });
+    }
+    return saved;
+  }, []);
+
   return (
     <div className="layout">
       <Sidebar
@@ -78,6 +92,7 @@ function App() {
           <Dashboard
             stats={stats}
             trades={trades ?? []}
+            capital={capital}
             onAddTrade={openNewTrade}
             onEditTrade={openEditTrade}
             onViewTrades={() => navigate('trades')}
@@ -102,6 +117,8 @@ function App() {
             importTrades={importTrades}
             restoreTrades={restoreTrades}
             clearAll={clearAll}
+            capital={capital}
+            onSaveCapital={handleSaveCapital}
           />
         )}
       </main>

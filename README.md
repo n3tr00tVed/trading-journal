@@ -7,7 +7,8 @@ your own device. No accounts, no servers, nothing leaves your browser.
 ## Features
 
 - **Dashboard** — net P&L, win rate, profit factor, average win/loss,
-  open positions, and recent trades at a glance.
+  account capital with return-on-capital, open positions, and recent
+  trades at a glance.
 - **Trade management** — add, edit, and delete trades; filter by symbol,
   direction, strategy, status, and date range; free-text search across
   symbol/strategy/setup/notes.
@@ -22,6 +23,8 @@ your own device. No accounts, no servers, nothing leaves your browser.
 - **Rules** — a private, autosaved page for your personal trading rules
   (risk limits, setups you trade, what disqualifies a trade). It lives in
   localStorage like the trades and never leaves the device.
+- **Account capital** — set your capital in Settings; the dashboard shows
+  it alongside net P&L and your return on capital (`netPnl / capital`).
 
 ## Getting started
 

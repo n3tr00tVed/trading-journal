@@ -43,6 +43,7 @@ function directionBadge(direction) {
 export default function Dashboard({
   stats,
   trades = [],
+  capital = null,
   onAddTrade,
   onEditTrade,
   onViewTrades,
@@ -54,6 +55,26 @@ export default function Dashboard({
   const openTrades = filterTrades(trades, { status: 'open' });
   const netTone =
     s.netPnl > 0 ? 'pos' : s.netPnl < 0 ? 'neg' : 'neutral';
+
+  // Capital card: set in Settings; shows live return-on-capital once known.
+  const hasCapital = Number.isFinite(capital) && capital > 0;
+  const returnOnCapital = hasCapital && Number.isFinite(s.netPnl)
+    ? (s.netPnl / capital) * 100
+    : null;
+  const capitalCard = (
+    <StatCard
+      label="Account capital"
+      value={hasCapital ? formatCurrency(capital) : '—'}
+      sub={
+        !hasCapital
+          ? 'Set it in Settings'
+          : returnOnCapital === null
+            ? 'No closed trades yet'
+            : `Return on capital: ${returnOnCapital > 0 ? '+' : ''}${formatPercent(returnOnCapital)}`
+      }
+      tone={hasCapital && s.netPnl > 0 ? 'pos' : hasCapital && s.netPnl < 0 ? 'neg' : 'neutral'}
+    />
+  );
 
   return (
     <div className="dash">
@@ -92,6 +113,7 @@ export default function Dashboard({
           value={s.avgLoss == null ? '—' : formatCurrency(s.avgLoss)}
           tone={s.avgLoss == null ? 'neutral' : 'neg'}
         />
+        {capitalCard}
       </div>
 
       {/* ---- Empty dataset ---- */}

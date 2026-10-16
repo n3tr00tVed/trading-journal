@@ -70,6 +70,15 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
 - Same safety model as trades: corrupt/non-string stored values load as ''.
 - Clearing requires an explicit confirm dialog.
 
+## Account capital (`src/lib/capitalStorage.js`)
+
+- Single non-negative number (or unset/null) stored at
+  `trading-journal:capital:v1`; rejects negative/non-finite on save,
+  ignores corrupt stored data on load.
+- `parseCapitalInput(text)` accepts `'$12,500.50'`/`''` (→ unset) styles.
+- App state owned by `App.jsx`; Settings page edits it, Dashboard renders
+  `Return on capital: netPnl / capital` when capital > 0.
+
 ## Engineering notes (post-integration)
 
 - `addTrade`/`updateTrade`/etc. compute from the current `list` state rather

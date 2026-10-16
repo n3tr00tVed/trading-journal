@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { parseCapitalInput } from '../lib/capitalStorage.js';
+import { formatCurrency } from '../lib/format.js';
 import { downloadFile, parseImportFile, toCsv, toJsonExport } from '../lib/export.js';
 
 const PRIVACY_NOTE =
@@ -38,7 +40,7 @@ async function readAsText(file) {
  * inline-confirm "delete all" danger zone. Every message shown here reflects
  * a real state change — nothing is faked.
  */
-export default function SettingsPage({ stats, trades = [], importTrades, restoreTrades, clearAll }) {
+export default function SettingsPage({ stats, trades = [], importTrades, restoreTrades, clearAll, capital = null, onSaveCapital }) {
   const [status, setStatus] = useState(null); // { kind: 'ok'|'error'|'info', message, details? }
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -110,10 +112,68 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
     setStatus({ kind: 'ok', message: 'All trades deleted.' });
   }
 
+  /** Account capital (see lib/capitalStorage.js) — explicit save, stat cards use it. */
+  const [capitalDraft, setCapitalDraft] = useState(capital == null ? '' : String(capital));
+  const [capitalNote, setCapitalNote] = useState(
+    capital == null ? null : { kind: 'ok', message: `Capital: ${formatCurrency(capital)}` },
+  );
+
+  function handleSaveCapital() {
+    const parsed = parseCapitalInput(capitalDraft);
+    if (!parsed.ok) {
+      setCapitalNote({ kind: 'error', message: parsed.error });
+      return;
+    }
+    const saved = typeof onSaveCapital === 'function' ? onSaveCapital(parsed.value) : true;
+    setCapitalDraft(parsed.value == null ? '' : String(parsed.value));
+    setCapitalNote(
+      saved
+        ? parsed.value == null
+          ? { kind: 'ok', message: 'Capital cleared. Stat cards will no longer show it.' }
+          : { kind: 'ok', message: `Capital saved: ${formatCurrency(parsed.value)}` }
+        : { kind: 'error', message: 'Could not save capital (storage unavailable).' },
+    );
+  }
+
   return (
     <main>
       <h1>Settings</h1>
       <p className="label">{stats?.total ?? tradeCount} trades · {stats?.open ?? 0} open on this device</p>
+
+      <section className="card" aria-labelledby="settings-capital-heading">
+        <h2 id="settings-capital-heading">Account capital</h2>
+        <p>Used to show your return-on-capital on the dashboard. Stored on this device only.</p>
+        <div className="form-actions" style={{ gap: '8px', alignItems: 'flex-end' }}>
+          <div>
+            <label htmlFor="capital-input" className="label">Capital (USD)</label>
+            <input
+              id="capital-input"
+              className="field"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
+              placeholder="e.g. 25000"
+              value={capitalDraft}
+              onChange={(event) => setCapitalDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSaveCapital();
+                }
+              }}
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={handleSaveCapital}>
+            {capitalDraft.trim() === '' ? 'Clear capital' : 'Save capital'}
+          </button>
+        </div>
+        {capitalNote ? (
+          <p className={capitalNote.kind === 'error' ? 'field-error' : 'label'} role="status">
+            {capitalNote.message}
+          </p>
+        ) : null}
+      </section>
 
       <section className="card" aria-labelledby="settings-export-heading">
         <h2 id="settings-export-heading">Data &amp; Export</h2>
