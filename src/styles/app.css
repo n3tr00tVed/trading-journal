@@ -106,6 +106,9 @@ button {
   max-width: 1200px;
   width: 100%;
   min-width: 0;
+  /* Center the capped column in the space right of the sidebar, so wide
+     screens don't end with a ragged empty right side. */
+  margin-inline: auto;
 }
 
 .page-title {
@@ -122,6 +125,25 @@ button {
 
 .page-head {
   margin-bottom: var(--space-6);
+}
+
+/* Page shells share one vertical rhythm: flex column + gap, and the
+   page-head's own margin is zeroed so spacing comes purely from the gap
+   (no double gaps between header and first card). */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.page-shell > .page-head,
+.page-shell > .section-header {
+  margin-bottom: 0;
+}
+
+.page-shell > * {
+  min-width: 0;
 }
 
 /* ---- Sidebar ---- */
@@ -234,6 +256,12 @@ button {
   padding: var(--space-4);
 }
 
+/* Wide tables scroll inside their card instead of spilling past it. */
+.card.table-wrap {
+  overflow-x: auto;
+  padding-right: var(--space-4); /* keep the scrollbar out of the border edge */
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -320,6 +348,11 @@ button {
   letter-spacing: 0.05em;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
+}
+
+/* Numeric headers must line up with their right-aligned cells. */
+.trades-table th.num {
+  text-align: right;
 }
 
 .trades-table td {
@@ -1003,6 +1036,141 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .live-dot.on {
+    animation: none;
+  }
+}
+
+/* ---- Market news ---- */
+
+.news-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.news-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--accent, #4a90d9);
+}
+
+.chip-active,
+.chip-active:hover {
+  background: var(--accent, #4a90d9);
+  border-color: var(--accent, #4a90d9);
+  color: #fff;
+}
+
+.news-updated {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3, 12px);
+}
+
+.news-card {
+  padding: var(--space-3, 12px);
+  margin-bottom: 0;
+}
+
+.news-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  margin-bottom: 6px;
+}
+
+.news-source {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+  flex: none;
+}
+
+.news-title {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 6px;
+  text-decoration: none;
+}
+
+.news-title:hover {
+  text-decoration: underline;
+}
+
+.news-summary {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.news-errors {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.news-errors ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.news-skeleton .skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  margin-bottom: 8px;
+  animation: news-shimmer 1.4s ease-in-out infinite;
+}
+
+.news-skeleton .skeleton-line.short {
+  width: 40%;
+  height: 16px;
+  margin-bottom: 12px;
+}
+
+@keyframes news-shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-skeleton .skeleton-line {
     animation: none;
   }
 }

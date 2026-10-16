@@ -164,10 +164,15 @@ export default function SettingsPage({
   }
 
   return (
-    <main>
-      <h1>Settings</h1>
-      <p className="label">{stats?.total ?? tradeCount} trades · {stats?.open ?? 0} open on this device</p>
-
+    <div className="page-shell">
+      <header className="page-head">
+        <div>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-sub">
+            {stats?.total ?? tradeCount} trades · {stats?.open ?? 0} open on this device
+          </p>
+        </div>
+      </header>
       <section className="card" aria-labelledby="settings-currency-heading">
         <h2 id="settings-currency-heading">Currency</h2>
         <p>Applies to every money display in the app (capital, trade prices, P&amp;L, calculator). Default ₹ INR for the Indian market.</p>
@@ -400,6 +405,6 @@ export default function SettingsPage({
           </button>
         )}
       </section>
-    </main>
+    </div>
   );
 }

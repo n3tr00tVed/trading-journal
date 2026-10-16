@@ -76,7 +76,7 @@ export default function CalculatorPage({ capital = null }) {
   const lotQty = isLotInstrument && hasResult ? result.lots * result.lotSize : null;
 
   return (
-    <section aria-labelledby="calc-heading" className="calc">
+    <section aria-labelledby="calc-heading" className="calc page-shell">
       <div className="page-head">
         <h1 id="calc-heading" className="page-title">Position size calculator</h1>
         <p className="page-sub">

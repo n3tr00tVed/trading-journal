@@ -232,7 +232,7 @@ export default function Dashboard({
 
       {/* ---- Recent trades ---- */}
       {hasTrades && (
-        <section className="card" aria-labelledby="recent-trades-title">
+        <section className="card table-wrap" aria-labelledby="recent-trades-title">
           <div className="section-header">
             <h2 className="section-title" id="recent-trades-title">
               Recent trades
@@ -259,8 +259,7 @@ export default function Dashboard({
               Six most recently opened trades. Amounts are shown in each
               trade's own market currency. Use the Edit button in each row to
               modify a trade.
-            </caption>
-            <thead>
+            </caption>            <thead>
               <tr>
                 <th scope="col">Symbol</th>
                 <th scope="col">Direction</th>
@@ -334,7 +333,7 @@ export default function Dashboard({
 
       {/* ---- Open positions (live) ---- */}
       {hasTrades && s.open > 0 && (
-        <section className="card" aria-labelledby="open-positions-title">
+        <section className="card table-wrap" aria-labelledby="open-positions-title">
           <div className="section-header">
             <h2 className="section-title" id="open-positions-title">
               Open positions

@@ -63,7 +63,7 @@ export default function RulesPage() {
   const lineCount = text === '' ? 0 : text.split('\n').length;
 
   return (
-    <section className="page" aria-labelledby="rules-heading">
+    <section className="page-shell" aria-labelledby="rules-heading">
       <header className="page-head">
         <div>
           <h1 id="rules-heading" className="page-title">Rules</h1>

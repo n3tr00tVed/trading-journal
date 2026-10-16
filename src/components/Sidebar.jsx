@@ -10,6 +10,7 @@
 const VIEWS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'trades', label: 'Trades' },
+  { id: 'news', label: 'News' },
   { id: 'rules', label: 'Rules' },
   { id: 'calculator', label: 'Calculator' },
   { id: 'settings', label: 'Settings' },

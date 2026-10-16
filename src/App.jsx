@@ -21,13 +21,14 @@ import TradesPage from './components/TradesPage.jsx';
 import TradeForm from './components/TradeForm.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import RulesPage from './components/RulesPage.jsx';
+import NewsPage from './components/NewsPage.jsx';
 import CalculatorPage from './components/CalculatorPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Modal from './components/Modal.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import './styles/app.css';
 
-const VIEWS = ['dashboard', 'trades', 'rules', 'calculator', 'settings'];
+const VIEWS = ['dashboard', 'trades', 'news', 'rules', 'calculator', 'settings'];
 const SYNC_DEBOUNCE_MS = 800;
 
 function App() {
@@ -395,6 +396,7 @@ function App() {
             />
           )}
 
+          {view === 'news' && <NewsPage />}
           {view === 'rules' && <RulesPage />}
 
           {view === 'calculator' && <CalculatorPage capital={marketCapital} />}

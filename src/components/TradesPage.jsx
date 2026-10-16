@@ -101,7 +101,7 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
   const noMatches = !noTradesAtAll && shown.length === 0;
 
   return (
-    <div className="page-head" style={{ width: '100%' }}>
+    <div className="page-shell">
       <div className="section-header">
         <div>
           <h1 className="page-title">Trades</h1>

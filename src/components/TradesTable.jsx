@@ -80,7 +80,7 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
 
   return (
     <>
-      <section className="card">
+      <section className="card table-wrap">
         <table className="trades-table">
           <caption className="visually-hidden">
             Trades matching the current filters. Amounts are shown in each
