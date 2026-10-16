@@ -29,7 +29,9 @@ export const NEWS_REGION_LABELS = {
 
 /**
  * Curated feeds. Publisher-hosted RSS only — no scraping, no aggregator
- * accounts, every feed public and free to read.
+ * accounts, every feed public and free to read. Feeds were verified live
+ * (HTTP 200 + RSS parse) in Oct 2026; Google News topic feeds back up
+ * publishers whose hosts block bots/proxies (Moneycontrol 403, Yahoo 429).
  */
 export const NEWS_SOURCES = [
   {
@@ -39,22 +41,10 @@ export const NEWS_SOURCES = [
     url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977011501.cms',
   },
   {
-    id: 'mc-top',
-    label: 'Moneycontrol · Top news',
+    id: 'gn-india',
+    label: 'Google News · India business',
     region: 'IN',
-    url: 'https://www.moneycontrol.com/rss/latestnews.xml',
-  },
-  {
-    id: 'mc-personal',
-    label: 'Moneycontrol · Personal finance',
-    region: 'IN',
-    url: 'https://www.moneycontrol.com/rss/businessnews.xml',
-  },
-  {
-    id: 'yahoo-us',
-    label: 'Yahoo Finance · US',
-    region: 'US',
-    url: 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC&region=US&lang=en-US',
+    url: 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en',
   },
   {
     id: 'cnbc-us',
@@ -63,12 +53,42 @@ export const NEWS_SOURCES = [
     url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258',
   },
   {
+    id: 'gn-us',
+    label: 'Google News · US business',
+    region: 'US',
+    url: 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en',
+  },
+  {
     id: 'coindesk',
     label: 'CoinDesk',
     region: 'CRYPTO',
     url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
   },
+  {
+    id: 'gn-crypto',
+    label: 'Google News · Crypto',
+    region: 'CRYPTO',
+    url: 'https://news.google.com/rss/search?q=crypto+OR+bitcoin+OR+ethereum&hl=en-US&gl=US&ceid=US:en',
+  },
 ];
+
+/** Hard ceiling per feed request: a slow relay must never pin the UI. */
+const FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(url) {
+  // AbortSignal.timeout exists in all modern browsers; fall back to a
+  // manual controller for older engines / tests.
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return fetch(url, { method: 'GET', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { method: 'GET', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function sourcesForRegion(region = 'all') {
   return NEWS_SOURCES.filter((source) => region === 'all' || source.region === region);
@@ -94,13 +114,14 @@ export function parseFeedXml(text, { sourceLabel = '', region = '' } = {}) {
     const link = (node.querySelector('link')?.textContent ?? '').trim();
     const publishedAt = (node.querySelector('pubDate')?.textContent ?? '').trim();
     const summary = (node.querySelector('description')?.textContent ?? '').trim();
+    const itemSource = (node.querySelector('source')?.textContent ?? '').trim() || sourceLabel;
     if (!title || !link || seen.has(link)) return;
     seen.add(link);
     const parsedDate = publishedDate(publishedAt);
     items.push({
       title,
       link,
-      source: sourceLabel,
+      source: itemSource,
       region,
       publishedAt: parsedDate ? parsedDate.toISOString() : null,
       summary: stripTags(summary).slice(0, 220),
@@ -198,7 +219,7 @@ export async function fetchNews(region = 'all', { force = false } = {}) {
   const results = await Promise.allSettled(
     sources.map(async (source) => {
       if (typeof fetch !== 'function') throw new Error('relay unreachable');
-      const response = await fetch(`${RELAY}${encodeURIComponent(source.url)}`, { method: 'GET' });
+      const response = await fetchWithTimeout(`${RELAY}${encodeURIComponent(source.url)}`);
       if (!response.ok) throw new Error('relay unreachable');
       const text = await response.text();
       const items = parseFeedXml(text, { sourceLabel: source.label, region: source.region });
