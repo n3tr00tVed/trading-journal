@@ -61,10 +61,10 @@ describe('capital in Settings and Dashboard', () => {
         onSaveCapital={(v) => saveCapital(v)}
       />,
     );
-    await user.type(screen.getByLabelText('Capital (USD)'), '25000');
+    await user.type(screen.getByLabelText('Capital (₹)'), '25000');
     await user.click(screen.getByRole('button', { name: 'Save capital' }));
     expect(loadCapital()).toBe(25000);
-    expect(screen.getByText('Capital saved: $25,000.00')).toBeInTheDocument();
+    expect(screen.getByText('Capital saved: ₹25,000.00')).toBeInTheDocument();
   });
 
   it('shows return-on-capital on the dashboard instead of the placeholder', () => {

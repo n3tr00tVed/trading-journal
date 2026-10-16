@@ -25,6 +25,13 @@ your own device. No accounts, no servers, nothing leaves your browser.
   localStorage like the trades and never leaves the device.
 - **Account capital** — set your capital in Settings; the dashboard shows
   it alongside net P&L and your return on capital (`netPnl / capital`).
+- **Position size calculator (Indian market)** — enter your capital
+  (₹25,000 prefill from Settings), risk %, entry and stop prices, and the
+  calculator answers how many shares — or whole F&O lots — you can buy,
+  capping by both risk and affordability. Lot sizes auto-fill for NSE/BSE
+  index and MCX contracts (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
+- **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
+  switch to $ USD any time in Settings.
 
 ## Getting started
 

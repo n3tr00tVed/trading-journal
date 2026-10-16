@@ -1,20 +1,34 @@
 /** Display formatting helpers. All helpers are null/NaN-safe and return '' on bad input. */
 
-export function formatCurrency(value) {
+export const SUPPORTED_CURRENCIES = ['INR', 'USD'];
+
+/**
+ * Locale per currency: INR uses Indian digit grouping (₹1,23,456),
+ * USD keeps en-US grouping.
+ */
+const LOCALE_BY_CURRENCY = { INR: 'en-IN', USD: 'en-US' };
+
+function normalizeCurrency(currency) {
+  if (SUPPORTED_CURRENCIES.includes(currency)) return currency;
+  return 'INR';
+}
+
+export function formatCurrency(value, currency = 'INR') {
   if (!Number.isFinite(value)) return '';
-  return new Intl.NumberFormat('en-US', {
+  const cur = normalizeCurrency(currency);
+  return new Intl.NumberFormat(LOCALE_BY_CURRENCY[cur], {
     style: 'currency',
-    currency: 'USD',
+    currency: cur,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
 }
 
 /** Currency with explicit +/- sign, for P&L displays. */
-export function signedFormatCurrency(value) {
+export function signedFormatCurrency(value, currency = 'INR') {
   if (!Number.isFinite(value)) return '';
-  if (value === 0) return formatCurrency(0);
-  return `${value > 0 ? '+' : '-'}${formatCurrency(Math.abs(value))}`;
+  if (value === 0) return formatCurrency(0, currency);
+  return `${value > 0 ? '+' : '−'}${formatCurrency(Math.abs(value), currency)}`;
 }
 
 export function formatPercent(value, digits = 1) {

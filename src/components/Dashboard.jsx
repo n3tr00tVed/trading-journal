@@ -21,6 +21,7 @@ import {
   formatRatio,
   signedFormatCurrency,
 } from '../lib/format.js';
+import { useCurrency } from '../hooks/useCurrency.js';
 import StatCard from './StatCard.jsx';
 import EmptyState from './EmptyState.jsx';
 // Single stylesheet import for the whole component tree I own.
@@ -47,9 +48,11 @@ export default function Dashboard({
   onAddTrade,
   onEditTrade,
   onViewTrades,
+  onOpenCalculator = () => {},
 }) {
   const s = stats ?? {};
   const hasTrades = trades.length > 0;
+  const { currency } = useCurrency();
 
   const recentTrades = sortTrades(trades, 'entryDate', 'desc').slice(0, 6);
   const openTrades = filterTrades(trades, { status: 'open' });
@@ -64,7 +67,7 @@ export default function Dashboard({
   const capitalCard = (
     <StatCard
       label="Account capital"
-      value={hasCapital ? formatCurrency(capital) : '—'}
+      value={hasCapital ? formatCurrency(capital, currency) : '—'}
       sub={
         !hasCapital
           ? 'Set it in Settings'
@@ -79,15 +82,26 @@ export default function Dashboard({
   return (
     <div className="dash">
       <div className="page-head">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-sub">Performance overview of your trading journal.</p>
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-sub">Performance overview of your trading journal.</p>
+        </div>
+        <div className="section-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onOpenCalculator}
+          >
+            Position size calculator
+          </button>
+        </div>
       </div>
 
       {/* ---- Summary cards ---- */}
       <div className="stat-grid">
         <StatCard
           label="Net P&L"
-          value={signedFormatCurrency(s.netPnl)}
+          value={signedFormatCurrency(s.netPnl, currency)}
           tone={netTone}
         />
         <StatCard
@@ -105,12 +119,12 @@ export default function Dashboard({
         />
         <StatCard
           label="Average win"
-          value={s.avgWin == null ? '—' : formatCurrency(s.avgWin)}
+          value={s.avgWin == null ? '—' : formatCurrency(s.avgWin, currency)}
           tone={s.avgWin == null ? 'neutral' : 'pos'}
         />
         <StatCard
           label="Average loss"
-          value={s.avgLoss == null ? '—' : formatCurrency(s.avgLoss)}
+          value={s.avgLoss == null ? '—' : formatCurrency(s.avgLoss, currency)}
           tone={s.avgLoss == null ? 'neutral' : 'neg'}
         />
         {capitalCard}
@@ -183,7 +197,7 @@ export default function Dashboard({
                         </>
                       ) : (
                         <span className={pnlClass(net)}>
-                          {signedFormatCurrency(net) || '—'}
+                          {signedFormatCurrency(net, currency) || '—'}
                         </span>
                       )}
                     </td>

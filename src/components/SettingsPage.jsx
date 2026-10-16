@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { parseCapitalInput } from '../lib/capitalStorage.js';
 import { formatCurrency } from '../lib/format.js';
+import { useCurrency } from '../hooks/useCurrency.js';
 import { downloadFile, parseImportFile, toCsv, toJsonExport } from '../lib/export.js';
 
 const PRIVACY_NOTE =
@@ -117,6 +118,7 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
   const [capitalNote, setCapitalNote] = useState(
     capital == null ? null : { kind: 'ok', message: `Capital: ${formatCurrency(capital)}` },
   );
+  const { currency, setCurrency } = useCurrency();
 
   function handleSaveCapital() {
     const parsed = parseCapitalInput(capitalDraft);
@@ -130,7 +132,7 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
       saved
         ? parsed.value == null
           ? { kind: 'ok', message: 'Capital cleared. Stat cards will no longer show it.' }
-          : { kind: 'ok', message: `Capital saved: ${formatCurrency(parsed.value)}` }
+          : { kind: 'ok', message: `Capital saved: ${formatCurrency(parsed.value, currency)}` }
         : { kind: 'error', message: 'Could not save capital (storage unavailable).' },
     );
   }
@@ -140,12 +142,24 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
       <h1>Settings</h1>
       <p className="label">{stats?.total ?? tradeCount} trades · {stats?.open ?? 0} open on this device</p>
 
+      <section className="card" aria-labelledby="settings-currency-heading">
+        <h2 id="settings-currency-heading">Currency</h2>
+        <p>Applies to every money display in the app (capital, trade prices, P&amp;L, calculator). Default ₹ INR for the Indian market.</p>
+        <div>
+          <label htmlFor="currency-select" className="label">Display currency</label>
+          <select id="currency-select" className="field" value={currency} onChange={(event) => setCurrency(event.target.value)}>
+            <option value="INR">INR — ₹ (Indian market)</option>
+            <option value="USD">USD — $</option>
+          </select>
+        </div>
+      </section>
+
       <section className="card" aria-labelledby="settings-capital-heading">
         <h2 id="settings-capital-heading">Account capital</h2>
         <p>Used to show your return-on-capital on the dashboard. Stored on this device only.</p>
         <div className="form-actions" style={{ gap: '8px', alignItems: 'flex-end' }}>
           <div>
-            <label htmlFor="capital-input" className="label">Capital (USD)</label>
+            <label htmlFor="capital-input" className="label">Capital ({currency === 'INR' ? '₹' : '$'})</label>
             <input
               id="capital-input"
               className="field"

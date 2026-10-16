@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { tradeNetPnl } from '../lib/calculations.js';
 import { isTradeOpen } from '../lib/schema.js';
 import { formatCurrency, formatDate, formatNumber, signedFormatCurrency } from '../lib/format.js';
+import { useCurrency } from '../hooks/useCurrency.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 
 function capitalize(value) {
@@ -19,7 +20,7 @@ function capitalize(value) {
 }
 
 /** Net P&L cell: '—' + Open badge for open trades, signed currency otherwise. */
-function NetPnlCell({ trade }) {
+function NetPnlCell({ trade, currency }) {
   if (isTradeOpen(trade)) {
     return (
       <td className="mono num">
@@ -31,13 +32,14 @@ function NetPnlCell({ trade }) {
   const net = tradeNetPnl(trade);
   return (
     <td className={`mono num ${net > 0 ? 'pnl-pos' : net < 0 ? 'pnl-neg' : 'pnl-flat'}`}>
-      {signedFormatCurrency(net)}
+      {signedFormatCurrency(net, currency)}
     </td>
   );
 }
 
 export default function TradesTable({ trades, onEdit, onDelete }) {
   const [pendingDelete, setPendingDelete] = useState(null);
+  const { currency } = useCurrency();
 
   function confirmDelete() {
     if (pendingDelete && typeof onDelete === 'function') onDelete(pendingDelete.id);
@@ -79,9 +81,9 @@ export default function TradesTable({ trades, onEdit, onDelete }) {
                     </span>
                   </td>
                   <td className="mono num">{formatNumber(trade.quantity)}</td>
-                  <td className="mono num">{formatCurrency(trade.entryPrice)}</td>
-                  <td className="mono num">{open ? '—' : formatCurrency(trade.exitPrice)}</td>
-                  <NetPnlCell trade={trade} />
+                  <td className="mono num">{formatCurrency(trade.entryPrice, currency)}</td>
+                  <td className="mono num">{open ? '—' : formatCurrency(trade.exitPrice, currency)}</td>
+                  <NetPnlCell trade={trade} currency={currency} />
                   <td>{trade.strategy || '—'}</td>
                   <td>{formatDate(trade.entryDate)}</td>
                   <td className="num">

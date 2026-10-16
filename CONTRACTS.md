@@ -79,6 +79,24 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
 - App state owned by `App.jsx`; Settings page edits it, Dashboard renders
   `Return on capital: netPnl / capital` when capital > 0.
 
+## Currency (`src/lib/settingsStorage.js` + `src/hooks/useCurrency.js`)
+
+- `CurrencyContext{ currency, setCurrency }` in `App.jsx`; persisted at
+  `trading-journal:settings:v1`. Default `INR`; only `INR`/`USD` accepted.
+- `formatCurrency/signedFormatCurrency(value, currency)` take the currency
+  explicitly everywhere; INR renders with `en-IN` grouping (₹1,23,456).
+
+## Position-size calculator (`src/lib/calculator.js` + `CalculatorPage`)
+
+- Pure `positionSizing({ capital, riskPercent, entryPrice, stopLoss,
+  direction, lotSize })` — two caps: `qtyByRisk = floor(riskAmount /
+  |entry-stop|)` (needs a stop on the losing side of entry) and
+  `qtyByCapital = floor(capital / entry)`; `recommendedQty = min(both)`;
+  lots = `floor(qty / lotSize)` only when lotSize > 1, rounded down so
+  planned outlay never exceeds capital. Null-safe, never NaN.
+- `LOT_SIZES` in `src/lib/lotSizes.js` curates NSE/BSE/MCX lots; cash
+  stocks and unknown symbols default to 1 (overridable input).
+
 ## Engineering notes (post-integration)
 
 - `addTrade`/`updateTrade`/etc. compute from the current `list` state rather
