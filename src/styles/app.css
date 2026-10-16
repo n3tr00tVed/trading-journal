@@ -242,6 +242,13 @@ button {
   margin-bottom: var(--space-4);
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .section-title {
   font-size: var(--text-lg);
 }
@@ -591,4 +598,223 @@ button {
   .page-head {
     margin-bottom: var(--space-5);
   }
+}
+
+/* ============================================================
+   Shared shell pieces consumed by other components
+   (App.jsx, Modal.jsx, ConfirmDialog.jsx, TradeForm.jsx,
+   TradesPage.jsx, TradesTable.jsx, SettingsPage.jsx)
+   ============================================================ */
+
+/* sr-only is the historical alias; keep both spellings supported. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Page wrappers ---- */
+
+.trades-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Generic card heading rhythm (only direct children, so section headers
+   inside .section-header are unaffected). */
+.card > h2 {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-3);
+}
+
+.card > h3 {
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.card > p {
+  margin-bottom: var(--space-2);
+}
+
+/* ---- Forms ---- */
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checkbox-label input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+/* ---- Table extras ---- */
+
+.actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ---- Alerts & toasts ---- */
+
+.alert {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-2);
+  background: var(--panel);
+  font-size: var(--text-md);
+  margin-bottom: var(--space-4);
+}
+
+.alert-error {
+  color: var(--neg);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.toast {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 2100;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-2);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: var(--text-md);
+  max-width: min(90vw, 420px);
+}
+
+.toast-pos {
+  color: var(--pos);
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.toast-neg {
+  color: var(--neg);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ---- Modal dialog ---- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(4, 8, 12, 0.65);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh var(--space-4) var(--space-5);
+  overflow-y: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+}
+
+.modal-close {
+  flex: none;
+}
+
+.modal-body {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+.modal-body .field {
+  margin-bottom: var(--space-4);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.confirm-body {
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+/* ---- Rules page (lead-integrated view) ---- */
+
+.rules-card {
+  padding: var(--space-5);
+}
+
+.rules-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.rules-status {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.rules-textarea {
+  min-height: 320px;
+  line-height: 1.6;
+  font-family: var(--mono);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.rules-textarea:focus-visible {
+  outline: 2px solid var(--accent-2);
 }

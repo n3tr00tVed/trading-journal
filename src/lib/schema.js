@@ -65,7 +65,7 @@ export function normalizeTrade(raw) {
     market: MARKETS.includes(raw.market) ? raw.market : 'stocks',
     direction,
     entryPrice,
-    exitPrice: exitPrice !== null && exitPrice >= 0 ? exitPrice : null,
+    exitPrice: exitPrice !== null ? exitPrice : null,
     quantity,
     entryDate: isValidDateString(raw.entryDate) ? raw.entryDate : null,
     exitDate: isValidDateString(raw.exitDate) ? raw.exitDate : null,

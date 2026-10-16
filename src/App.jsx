@@ -4,11 +4,12 @@ import Dashboard from './components/Dashboard.jsx';
 import TradesPage from './components/TradesPage.jsx';
 import TradeForm from './components/TradeForm.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
+import RulesPage from './components/RulesPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Modal from './components/Modal.jsx';
 import './styles/app.css';
 
-const VIEWS = ['dashboard', 'trades', 'settings'];
+const VIEWS = ['dashboard', 'trades', 'rules', 'settings'];
 
 function App() {
   const {
@@ -91,6 +92,8 @@ function App() {
             onDelete={deleteTrade}
           />
         )}
+
+        {view === 'rules' && <RulesPage />}
 
         {view === 'settings' && (
           <SettingsPage

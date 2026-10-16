@@ -19,6 +19,10 @@ your own device. No accounts, no servers, nothing leaves your browser.
 - **Export / import** — one-click CSV and JSON export, plus JSON import
   (merge or replace). Everything happens client-side.
 
+- **Rules** — a private, autosaved page for your personal trading rules
+  (risk limits, setups you trade, what disqualifies a trade). It lives in
+  localStorage like the trades and never leaves the device.
+
 ## Getting started
 
 ```bash

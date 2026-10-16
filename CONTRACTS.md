@@ -1,15 +1,9 @@
-# Shared Contracts — Trading Journal
+# Shared contracts — Trading Journal
 
-**Authoritative contracts. Agents MUST consume these modules as-is; do not modify files you do not own.**
-
-## File ownership
-
-| Owner | Files |
-|---|---|
-| Lead (integrator) | `src/lib/*`, `src/hooks/useTrades.js`, `src/App.jsx`, `src/main.jsx`, `vite.config.js`, `package.json` |
-| Agent UI | `src/components/Sidebar.jsx`, `src/components/StatCard.jsx`, `src/components/EmptyState.jsx`, `src/components/Dashboard.jsx`, `src/styles/app.css` |
-| Agent Trade Mgmt | `src/components/TradeForm.jsx`, `src/components/TradesTable.jsx`, `src/components/TradesPage.jsx` (no other files) |
-| Agent Persistence/QA | `src/components/SettingsPage.jsx`, `src/lib/export.js`, `src/tests/*.test.jsx` (any test files, incl. `workspace.test.jsx` replacing the placeholder stub) |
+Design and calculation-convention reference for the modules in `src/lib`,
+`src/hooks` and the component interfaces in `src/components`. (Originally
+written to coordinate parallel implementation agents; retained as the
+authoritative conventions doc.)
 
 ## Trade record (`src/lib/schema.js` → `normalizeTrade`, `validateTrade`, `createTrade`)
 
@@ -70,9 +64,30 @@ const { trades, stats, addTrade, updateTrade, deleteTrade, restoreTrades, import
 
 State-based routing on `view`: `dashboard | trades | settings` + modal `editing: null | 'new' | trade`. `useTrades` lives once in `App` and is passed down. Sidebar switches views. TradeForm opens via a shared modal wrapper; on save it calls `addTrade`/`updateTrade` and stays open side-free on error (errors from `validateTrade` rendered inline per field).
 
+## Rules view (`src/components/RulesPage.jsx` + `src/lib/rulesStorage.js`)
+
+- Free-form text, autosaved (600ms debounce) to `trading-journal:rules:v1`.
+- Same safety model as trades: corrupt/non-string stored values load as ''.
+- Clearing requires an explicit confirm dialog.
+
+## Engineering notes (post-integration)
+
+- `addTrade`/`updateTrade`/etc. compute from the current `list` state rather
+  than functional updates — deliberate, because persisting inside a
+  functional updater runs side effects twice under StrictMode. The UI only
+  triggers one mutation per interaction; `importTrades` handles batches
+  internally in a single pass.
+- A negative `exitPrice` never flips a trade to "open"; it is a validation
+  error (`Exit price must be 0 or a positive number.`).
+- `ok` from `importTrades` means "at least one trade was added".
+- No exit-vs-entry sanity rule exists by design: `exit < entry` is a normal
+  losing (long) or winning (short) trade, not malformed data.
+
 ## Data flow & styling rules
 
-- Pure dark trading-terminal aesthetic in `src/styles/app.css`; tokens in `:root` (`--bg: #0d1117`, panels `#12181f`, border `#1f2b38`, green `#2ecc71`-ish `#16a34a`/`#22c55e`, red `#ef4444`, accent blue `#3b82f6`, muted text `#8b98a9`, text `#e6edf3`). All CSS via `:root` variables cascading into plain CSS since index.css may also be edited by lead — **Agent UI must not import two different normalize/reset css; only import `./styles/app.css` inside components**, and just uses classes it defines.
+- Dark trading-terminal aesthetic in `src/styles/app.css`; all styling via
+  `:root` variables cascading into plain CSS. Only one stylesheet is imported
+  (`src/App.jsx`), and components use the shared class system.
 - Numbers/monospace in tables via `.mono` class; semantic positive/negative colors via `.pnl-pos`/`.pnl-neg`.
 - No animation beyond ≤150ms color/border transitions. No new npm deps.
 - Accessibility: every control needs an accessible label (`<label htmlFor>` or `aria-label`); table headers `<th scope>`; forms keep native focusability; buttons real `<button>`.
