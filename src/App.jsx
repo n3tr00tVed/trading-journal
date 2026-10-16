@@ -1,122 +1,135 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useState } from 'react';
+import { useTrades } from './hooks/useTrades.js';
+import Dashboard from './components/Dashboard.jsx';
+import TradesPage from './components/TradesPage.jsx';
+import TradeForm from './components/TradeForm.jsx';
+import SettingsPage from './components/SettingsPage.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import Modal from './components/Modal.jsx';
+import './styles/app.css';
+
+const VIEWS = ['dashboard', 'trades', 'settings'];
 
 function App() {
-  const [count, setCount] = useState(10)
+  const {
+    trades,
+    stats,
+    addTrade,
+    updateTrade,
+    deleteTrade,
+    importTrades,
+    restoreTrades,
+    clearAll,
+    lastError,
+  } = useTrades();
+
+  const [view, setView] = useState('dashboard');
+  const [form, setForm] = useState(null); // null | { mode: 'new' } | { mode: 'edit', trade }
+  const [toast, setToast] = useState(null); // { message, tone }
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const openNewTrade = useCallback(() => setForm({ mode: 'new' }), []);
+  const openEditTrade = useCallback((trade) => setForm({ mode: 'edit', trade }), []);
+  const closeForm = useCallback(() => setForm(null), []);
+
+  const handleSave = useCallback(
+    (values) => {
+      if (form?.mode === 'edit') return updateTrade(form.trade.id, values);
+      return addTrade(values);
+    },
+    [form, addTrade, updateTrade],
+  );
+
+  const handleSavedOk = useCallback(
+    (message) => {
+      setForm(null);
+      setToast({ message, tone: 'pos' });
+    },
+    [],
+  );
+
+  const navigate = useCallback((nextView) => {
+    if (VIEWS.includes(nextView)) setView(nextView);
+  }, []);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div className="layout">
+      <Sidebar
+        view={view}
+        onNavigate={navigate}
+        total={stats.total}
+        openCount={stats.open}
+      />
+
+      <main className="main" id="main-content">
+        {lastError ? (
+          <div className="alert alert-error" role="alert">
+            {lastError}
+          </div>
+        ) : null}
+
+        {view === 'dashboard' && (
+          <Dashboard
+            stats={stats}
+            trades={trades ?? []}
+            onAddTrade={openNewTrade}
+            onEditTrade={openEditTrade}
+            onViewTrades={() => navigate('trades')}
+          />
+        )}
+
+        {view === 'trades' && (
+          <TradesPage
+            trades={trades ?? []}
+            onAdd={openNewTrade}
+            onEdit={openEditTrade}
+            onDelete={deleteTrade}
+          />
+        )}
+
+        {view === 'settings' && (
+          <SettingsPage
+            stats={stats}
+            trades={trades ?? []}
+            importTrades={importTrades}
+            restoreTrades={restoreTrades}
+            clearAll={clearAll}
+          />
+        )}
+      </main>
+
+      {form ? (
+        <Modal
+          title={form.mode === 'new' ? 'Add trade' : 'Edit trade'}
+          onClose={closeForm}
+          width={520}
         >
-          Count is {count}
-        </button>
-      </section>
+          <TradeForm
+            initial={form.mode === 'edit' ? form.trade : null}
+            onSave={(values) => {
+              const result = handleSave(values);
+              if (result?.ok) {
+                handleSavedOk(form.mode === 'new' ? 'Trade added.' : 'Trade updated.');
+              }
+              return result;
+            }}
+            onCancel={closeForm}
+          />
+        </Modal>
+      ) : null}
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {toast ? (
+        <div className={`toast toast-${toast.tone}`} role="status">
+          {toast.message}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      ) : null}
+    </div>
+  );
 }
 
-export default App
+export default App;
