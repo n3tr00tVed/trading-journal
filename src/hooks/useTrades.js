@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { loadTrades, saveTrades } from '../lib/storage.js';
-import { createTrade, normalizeTrade, validateTrade } from '../lib/schema.js';
+import { createTrade, normalizeTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
 import { computeStats } from '../lib/calculations.js';
 
 /**
@@ -14,7 +14,15 @@ import { computeStats } from '../lib/calculations.js';
  * Mutations return { ok, errors } or { ok: true, trade } / { ok: true, tradeId }.
  * importTrades returns { added, skipped, errors, ok } — duplicate ids are
  * skipped (existing records are never silently overwritten).
+ *
+ * Locked history: a closed trade is immutable. updateTrade on one only
+ * accepts the internal screenshot flag (attaching a shot to a trade that
+ * got closed in the same save must keep working); every other field is
+ * rejected with { ok: false, locked: true }. Correcting a closed trade
+ * means deleting and re-entering it — recorded history stays honest.
  */
+const CLOSED_EDIT_ALLOWED_KEYS = new Set(['hasScreenshot']);
+
 export function useTrades() {
   // Lazy initializer: localStorage is only available in the browser,
   // which is exactly where this app runs.
@@ -43,6 +51,19 @@ export function useTrades() {
     (id, changes) => {
       const index = list.findIndex((t) => t.id === id);
       if (index === -1) return { ok: false, errors: { form: 'Trade not found.' } };
+
+      // Closed trades are locked: only the screenshot flag survives.
+      if (!isTradeOpen(list[index])) {
+        const forbidden = Object.keys(changes ?? {}).some((key) => !CLOSED_EDIT_ALLOWED_KEYS.has(key));
+        if (forbidden) {
+          return {
+            ok: false,
+            locked: true,
+            errors: { form: 'Closed trades are locked. Delete and re-enter the trade to correct its history.' },
+          };
+        }
+      }
+
       const merged = { ...list[index], ...changes, id, createdAt: list[index].createdAt };
       const normalized = normalizeTrade(merged);
       if (!normalized) return { ok: false, errors: { form: 'Invalid trade record.' } };

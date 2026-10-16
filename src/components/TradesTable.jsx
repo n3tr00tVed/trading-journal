@@ -147,14 +147,26 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
                   <td>{trade.strategy || '—'}</td>
                   <td>{formatDate(trade.entryDate)}</td>
                   <td className="num">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      aria-label={`Edit ${trade.symbol} trade`}
-                      onClick={() => onEdit?.(trade)}
-                    >
-                      Edit
-                    </button>
+                    {open ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        aria-label={`Edit ${trade.symbol} trade`}
+                        onClick={() => onEdit?.(trade)}
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled
+                        aria-label={`Edit ${trade.symbol} trade (locked: trade is closed)`}
+                        title="Closed trades are locked from editing. Delete and re-enter to correct history."
+                      >
+                        Edit 🔒
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"

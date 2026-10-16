@@ -79,48 +79,102 @@ describe('addTrade', () => {
 });
 
 describe('updateTrade', () => {
-  function hookWithClosedTrade() {
+  function hookWithTrade(trade) {
     const { result } = renderHook(() => useTrades());
     act(() => {
-      result.current.addTrade(CLOSED);
+      result.current.addTrade(trade);
     });
     return result;
   }
 
-  it('applies valid changes and preserves createdAt', () => {
-    const result = hookWithClosedTrade();
+  function hookWithClosedTrade() {
+    return hookWithTrade(CLOSED);
+  }
+
+  it('applies valid changes to an OPEN trade and preserves createdAt', () => {
+    const result = hookWithTrade(OPEN);
     const createdAt = result.current.trades[0].createdAt;
     expect(createdAt).toBeTruthy();
 
     let verdict;
     act(() => {
-      verdict = result.current.updateTrade(CLOSED.id, { exitPrice: 120, fees: 2 });
+      verdict = result.current.updateTrade(OPEN.id, { fees: 2.5 });
     });
     expect(verdict.ok).toBe(true);
-    expect(result.current.trades[0].exitPrice).toBe(120);
+    expect(result.current.trades[0].fees).toBe(2.5);
     expect(result.current.trades[0].createdAt).toBe(createdAt);
-    expect(storedTrades()[0].exitPrice).toBe(120);
+    expect(storedTrades()[0].fees).toBe(2.5);
+  });
+
+  it('closes an open trade via a valid exit (typed exit price)', () => {
+    const result = hookWithTrade(OPEN);
+    let verdict;
+    act(() => {
+      verdict = result.current.updateTrade(OPEN.id, { exitPrice: 180, exitDate: '2026-01-06' });
+    });
+    expect(verdict.ok).toBe(true);
+    expect(result.current.trades[0].exitPrice).toBe(180);
   });
 
   it('refuses invalid changes (bad dates / prices) and leaves the record untouched', () => {
-    const result = hookWithClosedTrade();
+    const result = hookWithTrade(OPEN);
     const before = { ...result.current.trades[0] };
 
     let verdict;
     act(() => {
-      verdict = result.current.updateTrade(CLOSED.id, { exitDate: '2026-01-01' }); // before entryDate
+      verdict = result.current.updateTrade(OPEN.id, { exitPrice: 180, exitDate: '2026-01-01' }); // before entryDate
     });
     expect(verdict.ok).toBe(false);
     expect(verdict.errors.exitDate).toBeTruthy();
 
     act(() => {
-      verdict = result.current.updateTrade(CLOSED.id, { entryPrice: -5 });
+      verdict = result.current.updateTrade(OPEN.id, { entryPrice: -5 });
     });
     expect(verdict.ok).toBe(false);
     expect(verdict.errors.entryPrice).toBeTruthy();
 
     expect(result.current.trades[0]).toEqual(before);
     expect(storedTrades()[0]).toEqual(before);
+  });
+
+  it('locks closed trades: P&L fields cannot be edited after closing', () => {
+    const result = hookWithClosedTrade();
+    const before = { ...result.current.trades[0] };
+
+    let verdict;
+    act(() => {
+      verdict = result.current.updateTrade(CLOSED.id, { exitPrice: 120, fees: 2, notes: 'adjusted' });
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.locked).toBe(true);
+    expect(verdict.errors.form).toMatch(/locked/i);
+
+    // Storage untouched too — the lock is a data-layer guarantee.
+    expect(result.current.trades[0]).toEqual(before);
+    expect(storedTrades()[0]).toEqual(before);
+  });
+
+  it('still allows the internal screenshot flag on closed trades', () => {
+    const result = hookWithClosedTrade();
+    let verdict;
+    act(() => {
+      verdict = result.current.updateTrade(CLOSED.id, { hasScreenshot: true });
+    });
+    expect(verdict.ok).toBe(true);
+    expect(result.current.trades[0].hasScreenshot).toBe(true);
+  });
+
+  it('open trade that closes in the same save can still take a screenshot flag', () => {
+    const result = hookWithTrade({ ...OPEN, id: 'fresh', exitPrice: null });
+    act(() => {
+      result.current.updateTrade('fresh', { exitPrice: 180, exitDate: '2026-01-06' });
+    });
+    let verdict;
+    act(() => {
+      verdict = result.current.updateTrade('fresh', { hasScreenshot: true });
+    });
+    expect(verdict.ok).toBe(true);
+    expect(result.current.trades[0].hasScreenshot).toBe(true);
   });
 
   it('reports a miss for unknown ids', () => {

@@ -3,6 +3,7 @@ import { useTrades } from './hooks/useTrades.js';
 import { useLivePrices } from './hooks/useLivePrices.js';
 import { loadCapitals, saveCapitals } from './lib/capitalStorage.js';
 import { loadRules } from './lib/rulesStorage.js';
+import { isTradeOpen } from './lib/schema.js';
 import { CurrencyContext } from './hooks/useCurrency.js';
 import { loadCurrency, saveCurrency, loadLivePrices, saveLivePrices } from './lib/settingsStorage.js';
 import { putScreenshot, deleteScreenshot, getScreenshot } from './lib/screenshots.js';
@@ -167,7 +168,22 @@ function App() {
   }, [trades, capitals, syncAuto, dataDir, syncNow]);
 
   const openNewTrade = useCallback(() => setForm({ mode: 'new' }), []);
-  const openEditTrade = useCallback((trade) => setForm({ mode: 'edit', trade }), []);
+  const openEditTrade = useCallback(
+    (trade) => {
+      // Recorded history lock: closed trades are enforced as immutable at
+      // the data layer too, but some flows may still hold a stale trade
+      // object, so the form entry point refuses them explicitly.
+      if (trade && !isTradeOpen(trade)) {
+        setToast({
+          message: 'Closed trades are locked from editing. Delete and re-enter the trade to correct its history.',
+          tone: 'neg',
+        });
+        return;
+      }
+      setForm({ mode: 'edit', trade });
+    },
+    [],
+  );
   const closeForm = useCallback(() => setForm(null), []);
 
   /** Save the trade record, then mirror any screenshot change to IndexedDB. */

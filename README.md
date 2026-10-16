@@ -47,6 +47,11 @@ your own device. No accounts, no servers, nothing leaves your browser.
   spelled out). Quotes are held in memory only and never stored or
   synced; toggle it off in Settings anytime (it's the app's only network
   activity, and stock/futures/forex positions stay manual).
+- **Locked history** — once a trade is closed it can no longer be edited:
+  its Edit button locks (🔒) and the data layer rejects any change to a
+  closed record's P&L fields. Your recorded history can't be quietly
+  rewritten; correcting a mistake means deleting and re-entering the
+  trade (deletion keeps its confirm guard).
 - **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
   switch between **India (₹ INR)** and **US ($ USD)** markets from the
   sidebar dropdown (any view) or in Settings.

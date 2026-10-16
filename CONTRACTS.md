@@ -66,6 +66,7 @@ const { trades, stats, addTrade, updateTrade, deleteTrade, restoreTrades, import
 
 - Backed by `src/lib/storage.js` (`loadTrades(): Trade[]` with per-record `normalizeTrade` + `validateTrade` filtering/quarantine of malformed records, `saveTrades(trades)` best-effort with quota/serialization-safe try/catch, `STORAGE_KEY = 'trading-journal:trades:v1'`).
 - Mutations validate and return `{ ok, errors }`; all state updates persist synchronously to localStorage; `stats` from `computeStats(trades)` via `useMemo`.
+- **Closed trades are immutable**: `updateTrade` on a closed record only accepts the internal `hasScreenshot` flag; any other field returns `{ ok: false, locked: true }` without touching storage. The edit affordance is removed for closed rows (disabled "Edit 🔒" with an explanation; `App.openEditTrade` also refuses defensively, since callers may hold a stale pre-closure trade snapshot). Deleting and re-entering is the sanctioned way to correct a closed trade, so recorded history can never be quietly rewritten.
 - `importTrades(raw)` validates array of raw objects, returns `{ ok, added, skipped, errors }`, merges by id (skip duplicates), persists.
 
 ## App shell (`src/App.jsx` — lead)
