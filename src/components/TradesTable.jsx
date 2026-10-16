@@ -37,7 +37,7 @@ function NetPnlCell({ trade, currency }) {
   );
 }
 
-export default function TradesTable({ trades, onEdit, onDelete }) {
+export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const { currency } = useCurrency();
 
@@ -73,7 +73,20 @@ export default function TradesTable({ trades, onEdit, onDelete }) {
               const open = isTradeOpen(trade);
               return (
                 <tr key={trade.id}>
-                  <td className="mono">{trade.symbol}</td>
+                  <td className="mono">
+                    {trade.symbol}
+                    {trade.hasScreenshot ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm image-flag"
+                        aria-label={`View screenshot of ${trade.symbol} trade`}
+                        title="View screenshot"
+                        onClick={() => onViewScreenshot?.(trade)}
+                      >
+                        📷
+                      </button>
+                    ) : null}
+                  </td>
                   <td>{capitalize(trade.market)}</td>
                   <td>
                     <span className={`badge ${trade.direction === 'long' ? 'badge-pos' : 'badge-neg'}`}>

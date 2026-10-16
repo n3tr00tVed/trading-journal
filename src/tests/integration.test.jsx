@@ -159,7 +159,7 @@ describe('full persistence round-trip: add → export → wipe → restore → r
     const json = toJsonExport(apiRef.current.trades);
     const csv = toCsv(apiRef.current.trades);
     expect(csv.split('\n')[0]).toBe(
-      'id,symbol,market,direction,entryPrice,exitPrice,quantity,entryDate,exitDate,fees,strategy,setup,notes,createdAt',
+      'id,symbol,market,direction,entryPrice,exitPrice,quantity,entryDate,exitDate,fees,strategy,setup,notes,hasScreenshot,createdAt',
     );
     expect(csv).toContain('open-1,MSFT,stocks,short,200,,1,2026-01-05,,');
 

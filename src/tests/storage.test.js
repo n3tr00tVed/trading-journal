@@ -16,6 +16,7 @@ const CLOSED = {
   strategy: 'ORB',
   setup: 'breakout',
   notes: 'clean fill',
+  hasScreenshot: false,
   createdAt: '2026-01-02T15:00:00.000Z',
 };
 

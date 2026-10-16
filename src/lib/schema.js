@@ -3,7 +3,7 @@
  *
  * Canonical field list (see CONTRACTS.md):
  *   id, symbol, market, direction, entryPrice, exitPrice, quantity,
- *   entryDate, exitDate, fees, strategy, setup, notes, createdAt
+ *   entryDate, exitDate, fees, strategy, setup, notes, hasScreenshot, createdAt
  *
  * `exitPrice === null` means the trade is open. Status is always derived,
  * never stored, so totals cannot drift from the raw records.
@@ -73,6 +73,7 @@ export function normalizeTrade(raw) {
     strategy: toText(raw.strategy),
     setup: toText(raw.setup),
     notes: typeof raw.notes === 'string' ? raw.notes : toText(raw.notes),
+    hasScreenshot: raw.hasScreenshot === true,
     createdAt: typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date().toISOString(),
   };
 

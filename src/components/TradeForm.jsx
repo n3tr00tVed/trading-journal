@@ -11,10 +11,137 @@
  * with validateTrade() from ../lib/schema.js before onSave is ever called.
  */
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { DIRECTIONS, MARKETS, validateTrade } from '../lib/schema.js';
+import { getScreenshot } from '../lib/screenshots.js';
 
 const EMPTY_EXIT_PRICE = 'Exit price is required for a closed trade.';
+
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // keep blobs sane for IndexedDB
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+/**
+ * Screenshot attach / preview / remove control (PNG/JPEG/WEBP/GIF ≤ 5 MB).
+ * Reports its pending change upward as { file?, removed? } so the trade
+ * payload plus IndexedDB update flow through a single save path.
+ */
+function ScreenshotField({ tradeId, hasInitial, onChange }) {
+  const fieldId = 'trade-screenshot';
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingUrl, setPendingUrl] = useState(null);
+  const [removed, setRemoved] = useState(false);
+  const [existingUrl, setExistingUrl] = useState(null);
+  const [missing, setMissing] = useState(false);
+  const [warn, setWarn] = useState(null);
+
+  // Load the stored screenshot once (edit mode). Graceful when absent.
+  useEffect(() => {
+    let cancelled = false;
+    if (hasInitial && tradeId) {
+      getScreenshot(tradeId).then((blob) => {
+        if (cancelled) return;
+        if (blob instanceof Blob) {
+          setExistingUrl(URL.createObjectURL(blob));
+        } else {
+          setMissing(true);
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [tradeId, hasInitial]);
+
+  // Each object-URL is revoked exactly when it is replaced or unmounted.
+  useEffect(() => {
+    if (!pendingUrl) return undefined;
+    return () => URL.revokeObjectURL(pendingUrl);
+  }, [pendingUrl]);
+
+  useEffect(() => {
+    if (!existingUrl) return undefined;
+    return () => URL.revokeObjectURL(existingUrl);
+  }, [existingUrl]);
+
+  const emit = (file, isRemoved) => onChange({ file, removed: isRemoved });
+
+  const handleFile = (event) => {
+    const selected = event.target.files?.[0];
+    setWarn(null);
+    if (!selected) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(selected.type) || selected.size > MAX_SCREENSHOT_BYTES) {
+      event.target.value = '';
+      setWarn('Choose a PNG, JPEG, WEBP or GIF image up to 5 MB.');
+      return;
+    }
+    setPendingFile(selected);
+    setPendingUrl(URL.createObjectURL(selected));
+    setRemoved(false);
+    emit(selected, false);
+    event.target.value = '';
+  };
+
+  const handleRemove = (event) => {
+    const checked = event.target.checked;
+    setRemoved(checked);
+    if (checked) {
+      setPendingFile(null); // picking a file and clicking remove are exclusive
+    }
+    emit(null, checked && hasInitial);
+  };
+
+  const previewUrl = pendingUrl ?? (removed ? null : existingUrl);
+
+  const hintText = pendingFile
+    ? `${pendingFile.name} — attaches when you save.`
+    : missing
+      ? 'No screenshot saved on this device (attachments are local-only, not included in exports).'
+      : hasInitial && !removed
+        ? 'Saved screenshot loaded. Pick a new image to replace it.'
+        : 'Optional: attach a chart snapshot from your device (PNG/JPEG/WEBP/GIF up to 5 MB, stored in your browser only).';
+
+  return (
+    <div className="field screenshot-field">
+      <label className="label" htmlFor={fieldId}>
+        Screenshot
+      </label>
+
+      {previewUrl ? (
+        <img
+          className="screenshot-thumb"
+          src={previewUrl}
+          alt={pendingFile ? `New screenshot ${pendingFile.name}` : 'Saved chart screenshot'}
+          width="220"
+        />
+      ) : null}
+
+      <p className="page-sub" id={`${fieldId}-hint`}>{hintText}</p>
+
+      <input
+        id={fieldId}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={handleFile}
+        aria-describedby={`${fieldId}-hint`}
+      />
+
+      {pendingFile ? (
+        <p className="page-sub">{pendingFile.name} — attaches when you save.</p>
+      ) : hasInitial && !removed && !missing ? (
+        <div className="checkbox-label">
+          <input type="checkbox" id={`${fieldId}-remove`} checked={removed} onChange={handleRemove} />
+          <label htmlFor={`${fieldId}-remove`}>Remove screenshot on save</label>
+        </div>
+      ) : null}
+
+      {warn ? (
+        <p className="field-error" id={`${fieldId}-warn`} role="alert">
+          {warn}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -84,10 +211,44 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
   const [draft, setDraft] = useState(() => draftFrom(initial));
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [screenshotChange, setScreenshotChange] = useState(null); // { file?, removed? }
 
   const set = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
     setDraft((d) => ({ ...d, [field]: value }));
+  };
+
+  /**
+   * Typing an exit price instantly marks the trade closed (no separate
+   * checkbox dance), so the input always accepts keystrokes.
+   */
+  const setExitPriceLive = (event) => {
+    const value = event.target.value;
+    setDraft((d) => ({
+      ...d,
+      exitPrice: value,
+      isOpen: value.trim() === '' ? d.isOpen : false,
+    }));
+  };
+
+  /** Typing an exit date also closes the trade. */
+  const setExitDateLive = (event) => {
+    const value = event.target.value;
+    setDraft((d) => ({
+      ...d,
+      exitDate: value,
+      isOpen: value === '' ? d.isOpen : false,
+    }));
+  };
+
+  /** "Open" checkbox: clears the exit fields (they only exist when closed). */
+  const setIsOpen = (event) => {
+    const checked = event.target.checked;
+    setDraft((d) => ({
+      ...d,
+      isOpen: checked,
+      ...(checked ? { exitPrice: '', exitDate: '' } : {}),
+    }));
   };
 
   const err = (field) => errors[field] || null;
@@ -99,6 +260,11 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
   async function handleSubmit(event) {
     event.preventDefault();
     const values = buildValues(draft);
+
+    // Screenshot payload (not part of schema validation; handled by the
+    // parent after the record itself saves — blob goes to IndexedDB).
+    values.screenshotFile = screenshotChange?.file instanceof File ? screenshotChange.file : null;
+    values.screenshotRemoveExisting = screenshotChange?.removed === true;
 
     const nextErrors = { ...validateTrade(values).errors };
     // Local rule (stricter, friendlier copy than validateTrade's NaN message):
@@ -230,9 +396,9 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
           step="any"
           min="0"
           inputMode="decimal"
-          value={draft.isOpen ? '' : draft.exitPrice}
-          onChange={set('exitPrice')}
-          disabled={draft.isOpen}
+          value={draft.exitPrice}
+          onChange={setExitPriceLive}
+          placeholder="Leave empty while the trade is open"
           {...errorProps('exitPrice')}
         />
         {err('exitPrice') && (
@@ -291,9 +457,8 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
           id={`${id}-exitDate`}
           name="exitDate"
           type="date"
-          value={draft.isOpen ? '' : draft.exitDate}
-          onChange={set('exitDate')}
-          disabled={draft.isOpen}
+          value={draft.exitDate}
+          onChange={setExitDateLive}
           {...errorProps('exitDate')}
         />
         {err('exitDate') && (
@@ -332,7 +497,7 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
             name="isOpen"
             type="checkbox"
             checked={draft.isOpen}
-            onChange={set('isOpen')}
+            onChange={setIsOpen}
           />
           Trade is open (no exit yet)
         </label>
@@ -379,6 +544,12 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
           placeholder="Anything worth remembering about this trade…"
         />
       </div>
+
+      <ScreenshotField
+        tradeId={initial?.id ?? null}
+        hasInitial={initial?.hasScreenshot === true}
+        onChange={setScreenshotChange}
+      />
 
       <div className="form-actions">
         <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>

@@ -22,13 +22,14 @@ export const CSV_COLUMNS = [
   'strategy',
   'setup',
   'notes',
+  'hasScreenshot',
   'createdAt',
 ];
 
 /**
  * Escape a single CSV cell per RFC 4180: fields containing a comma, double
  * quote, or newline are wrapped in double quotes and internal quotes are
- * doubled. null/undefined become empty cells.
+ * doubled. null/undefined become empty cells; booleans export as true/false.
  */
 function csvCell(value) {
   if (value === null || value === undefined) return '';
@@ -43,7 +44,13 @@ function csvCell(value) {
 export function toCsv(trades) {
   const list = Array.isArray(trades) ? trades : [];
   const header = CSV_COLUMNS.join(',');
-  const rows = list.map((trade) => CSV_COLUMNS.map((column) => csvCell(trade?.[column])).join(','));
+  const rows = list.map((trade) =>
+    CSV_COLUMNS.map((column) => {
+      // Boolean columns normalize records that predate the flag.
+      const value = column === 'hasScreenshot' ? trade?.hasScreenshot === true : trade?.[column];
+      return csvCell(value);
+    }).join(','),
+  );
   return [header, ...rows].join('\n');
 }
 

@@ -902,3 +902,47 @@ button {
   outline: 2px solid var(--accent-2);
   outline-offset: 1px;
 }
+
+/* ---- Trade screenshots ---- */
+
+.screenshot-field input[type='file'] {
+  padding: 6px;
+}
+
+.screenshot-thumb {
+  display: block;
+  max-width: 220px;
+  max-height: 150px;
+  object-fit: cover;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  margin-bottom: var(--space-2);
+}
+
+.screenshot-full {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  margin: 0 auto;
+}
+
+.image-flag {
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+/* ---- Folder sync (trades_data) ---- */
+
+.sync-layout {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-3);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-x: auto;
+  margin: var(--space-2) 0;
+}

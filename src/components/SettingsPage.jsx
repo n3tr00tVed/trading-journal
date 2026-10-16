@@ -41,7 +41,25 @@ async function readAsText(file) {
  * inline-confirm "delete all" danger zone. Every message shown here reflects
  * a real state change — nothing is faked.
  */
-export default function SettingsPage({ stats, trades = [], importTrades, restoreTrades, clearAll, capital = null, onSaveCapital }) {
+export default function SettingsPage({
+  stats,
+  trades = [],
+  importTrades,
+  restoreTrades,
+  clearAll,
+  capitals = null,
+  onSaveCapitals,
+  syncSupported = false,
+  syncStatus = 'off', // off | connecting | on | blocked | error | unsupported
+  syncAuto = true,
+  onSyncAutoChange,
+  dataDir = null,
+  syncNote = null, // { tone, message } | null
+  onConnectSync,
+  onDisconnectSync,
+  onSyncNow,
+  onRestoreFromFolder,
+}) {
   const [status, setStatus] = useState(null); // { kind: 'ok'|'error'|'info', message, details? }
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -113,27 +131,33 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
     setStatus({ kind: 'ok', message: 'All trades deleted.' });
   }
 
-  /** Account capital (see lib/capitalStorage.js) — explicit save, stat cards use it. */
-  const [capitalDraft, setCapitalDraft] = useState(capital == null ? '' : String(capital));
-  const [capitalNote, setCapitalNote] = useState(
-    capital == null ? null : { kind: 'ok', message: `Capital: ${formatCurrency(capital)}` },
-  );
+  /** Capitals per market (see lib/capitalStorage.js) — explicit two-field save. */
+  const [draftINR, setDraftINR] = useState(capitals?.INR == null ? '' : String(capitals.INR));
+  const [draftUSD, setDraftUSD] = useState(capitals?.USD == null ? '' : String(capitals.USD));
+  const [capitalNote, setCapitalNote] = useState(null);
   const { currency, setCurrency } = useCurrency();
 
-  function handleSaveCapital() {
-    const parsed = parseCapitalInput(capitalDraft);
-    if (!parsed.ok) {
-      setCapitalNote({ kind: 'error', message: parsed.error });
+  function handleSaveCapitals() {
+    const inrParsed = parseCapitalInput(draftINR);
+    const usdParsed = parseCapitalInput(draftUSD);
+    if (!inrParsed.ok) {
+      setCapitalNote({ kind: 'error', message: `India capital: ${inrParsed.error}` });
       return;
     }
-    const saved = typeof onSaveCapital === 'function' ? onSaveCapital(parsed.value) : true;
-    setCapitalDraft(parsed.value == null ? '' : String(parsed.value));
+    if (!usdParsed.ok) {
+      setCapitalNote({ kind: 'error', message: `US capital: ${usdParsed.error}` });
+      return;
+    }
+    const saved = typeof onSaveCapitals === 'function' ? onSaveCapitals({ INR: inrParsed.value, USD: usdParsed.value }) : true;
+    setDraftINR(inrParsed.value == null ? '' : String(inrParsed.value));
+    setDraftUSD(usdParsed.value == null ? '' : String(usdParsed.value));
     setCapitalNote(
       saved
-        ? parsed.value == null
-          ? { kind: 'ok', message: 'Capital cleared. Stat cards will no longer show it.' }
-          : { kind: 'ok', message: `Capital saved: ${formatCurrency(parsed.value, currency)}` }
-        : { kind: 'error', message: 'Could not save capital (storage unavailable).' },
+        ? {
+            kind: 'ok',
+            message: `Capitals saved — India ${inrParsed.value == null ? '(unset)' : formatCurrency(inrParsed.value, 'INR')} · US ${usdParsed.value == null ? '(unset)' : formatCurrency(usdParsed.value, 'USD')}`,
+          }
+        : { kind: 'error', message: 'Could not save capitals (storage unavailable).' },
     );
   }
 
@@ -156,30 +180,53 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
 
       <section className="card" aria-labelledby="settings-capital-heading">
         <h2 id="settings-capital-heading">Account capital</h2>
-        <p>Used to show your return-on-capital on the dashboard. Stored on this device only.</p>
+        <p>
+          One capital per market — the dashboard and calculator use the one matching your chosen market
+          (sidebar switch). Stored on this device only.
+        </p>
         <div className="form-actions" style={{ gap: '8px', alignItems: 'flex-end' }}>
           <div>
-            <label htmlFor="capital-input" className="label">Capital ({currency === 'INR' ? '₹' : '$'})</label>
+            <label htmlFor="capital-inr" className="label">India capital (₹ INR)</label>
             <input
-              id="capital-input"
+              id="capital-inr"
               className="field"
               type="number"
               inputMode="decimal"
               step="any"
               min="0"
               placeholder="e.g. 25000"
-              value={capitalDraft}
-              onChange={(event) => setCapitalDraft(event.target.value)}
+              value={draftINR}
+              onChange={(event) => setDraftINR(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
-                  handleSaveCapital();
+                  handleSaveCapitals();
                 }
               }}
             />
           </div>
-          <button type="button" className="btn btn-primary" onClick={handleSaveCapital}>
-            {capitalDraft.trim() === '' ? 'Clear capital' : 'Save capital'}
+          <div>
+            <label htmlFor="capital-usd" className="label">US capital ($ USD)</label>
+            <input
+              id="capital-usd"
+              className="field"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
+              placeholder="e.g. 10000"
+              value={draftUSD}
+              onChange={(event) => setDraftUSD(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSaveCapitals();
+                }
+              }}
+            />
+          </div>
+          <button type="button" className="btn btn-primary" onClick={handleSaveCapitals}>
+            Save capitals
           </button>
         </div>
         {capitalNote ? (
@@ -187,6 +234,66 @@ export default function SettingsPage({ stats, trades = [], importTrades, restore
             {capitalNote.message}
           </p>
         ) : null}
+      </section>
+
+      <section className="card" aria-labelledby="settings-sync-heading">
+        <h2 id="settings-sync-heading">Device folder backup (trades_data)</h2>
+        {!syncSupported ? (
+          <p>
+            Folder auto-save needs Chrome or Edge (File System Access API). In this browser the journal keeps its
+            private localStorage store and you can use manual CSV/JSON export instead.
+          </p>
+        ) : (
+          <>
+            {syncStatus === 'on' ? (
+              <>
+                <p role="status">
+                  Auto-save {syncAuto ? 'on' : 'paused'}{dataDir ? ' → trades_data/' : ''}
+                  {syncNote ? ` — ${syncNote.message}` : ''}
+                </p>
+                <div>
+                  <button type="button" className="btn btn-ghost" onClick={onSyncNow}>Save now</button>
+                  <button type="button" className="btn btn-ghost" onClick={onRestoreFromFolder}>Restore trades from folder…</button>
+                  <button type="button" className="btn btn-primary" onClick={onDisconnectSync}>Disconnect folder</button>
+                </div>
+                <div className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    id="sync-auto-checkbox"
+                    checked={syncAuto}
+                    onChange={(event) => onSyncAutoChange?.(event.target.checked)}
+                  />
+                  <label htmlFor="sync-auto-checkbox">Auto-save on every change</label>
+                </div>
+              </>
+            ) : (
+              <>
+                {syncStatus === 'blocked' ? (
+                  <p className="field-error">
+                    Folder access was revoked or the folder moved. Reconnect to continue auto-saving.
+                  </p>
+                ) : syncStatus === 'error' ? (
+                  <p className="field-error">
+                    The last write to trades_data/ failed. Rename nothing, press “Save now”, or reconnect.
+                  </p>
+                ) : (
+                  <p>Grant access to a folder once; then every save is mirrored locally:</p>
+                )}
+                <pre className="sync-layout">{'trades_data/\n  trades.json   — all trade records (restorable)\n  rules.txt     — your rules text\n  capital.json  — India & US capitals'}</pre>
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={onConnectSync}
+                    disabled={syncStatus === 'connecting'}
+                  >
+                    {syncStatus === 'connecting' ? 'Waiting for folder access…' : 'Choose folder & enable auto-save'}
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </section>
 
       <section className="card" aria-labelledby="settings-export-heading">
