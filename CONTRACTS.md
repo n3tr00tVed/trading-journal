@@ -16,9 +16,11 @@ authoritative conventions doc.)
   entryPrice: number,  // > 0
   exitPrice: number|null, // null => open trade. 0 is a legal exit price (never treated as open)
   quantity: number,    // > 0
+  leverage: number|null, // e.g. 5 = 5× margin; null = unlevered (validated ≥ 1)
   entryDate: string,   // ISO "YYYY-MM-DD" (required)
   exitDate: string|null,  // ISO "YYYY-MM-DD"; required when closed
-  invested: number|null,  // money committed; null = derive as entryPrice × quantity
+  invested: number|null,  // money committed; null = derive as entryPrice × quantity ÷ leverage
+  currency: 'INR'|'USD',  // native tag of the trade's market (legacy defaults to 'INR')
   fees: number,        // >= 0, default 0
 
   strategy: string,    // optional, free text, may be ""
@@ -37,15 +39,19 @@ authoritative conventions doc.)
 
 - `tradeGrossPnl(trade)` — closed only: long `(exit-entry)*qty`, short `(entry-exit)*qty`; open → `0`.
 - `tradeNetPnl(trade)` — ` tradeGrossPnl(trade) - (trade.fees || 0)`, closed only.
+- `tradeInvested(trade)` — capital actually committed: explicit `invested` when set, else `(entryPrice × quantity) ÷ leverage` (leverage < 1 ignored = ÷1), else `0`. Open trades invest too.
+- `tradeReturnOnInvested(trade)` — net P&L as % of invested; `null` while open or invested ≤ 0.
 - `isTradeOpen(trade)`.
 - `computeStats(trades)` →
-  `{ total, open, closed, wins, losses, breakeven, winRate, grossProfit, grossLoss, netPnl, totalFees, profitFactor, avgWin, avgLoss, expectancy, largestWin, largestLoss }`
+  `{ total, open, closed, wins, losses, breakeven, winRate, grossProfit, grossLoss, netPnl, totalFees, profitFactor, avgWin, avgLoss, expectancy, largestWin, largestLoss, investedClosed, investedOpen }`
   - win/loss classification by **net** PnL (fees included); `wins: net > 0`, `losses: net < 0`, `breakeven: net === 0`.
   - `winRate = (wins / closed) * 100` when `closed > 0`, else `null`.
   - `profitFactor = grossProfit / grossLoss` where `grossProfit = Σ net pnl of wins`, `grossLoss = |Σ net pnl of losses|`; return `null` when closed === 0 or both grossProfit and grossLoss are 0; return `Infinity` when grossProfit > 0 and grossLoss === 0. UI renders `Infinity` as `"∞"`.
   - `avgWin = grossProfitOfWins / wins` (null when no wins), `avgLoss` analogous, `expectancy = netPnl / closed` (null when closed === 0).
   - All aggregate fields are `0` for empty arrays except ratios which are `null` — nothing NaN anywhere.
-- `filterTrades(trades, { query, symbol, direction, strategy, market?, dateFrom, dateTo, status })` — all optional; `status` in `all|open|closed`; `query` matches symbol/strategy/setup/notes case-insensitively; date strings compare lexicographically (valid `YYYY-MM-DD`).
+- `computeCurrencyBreakdown(trades)` → `{ INR: stats, USD: stats }` — both keys always present (empty ledgers are zero-stat). **Rupees and dollars are never summed**: per-market money (net P&L, invested, averages) comes from each bucket; the active-market ledger leads UI cards and the other market surfaces in the sub-line.
+- **Currency tagging**: trades carry a native `currency` tag of their market. New trades are tagged with the market you're viewing at save time (`App.saveTradeWithScreenshot`); edited trades keep their tag **unless the `market` field changes** — fixing the wrong market re-tags the profit to that market. Every money cell in the tables renders in `trade.currency` row by row.
+- `filterTrades(trades, { query, symbol, direction, strategy, market?, currency?, dateFrom, dateTo, status })` — all optional; `currency` in `all|INR|USD`; `status` in `all|open|closed`; `query` matches symbol/strategy/setup/notes case-insensitively; date strings compare lexicographically (valid `YYYY-MM-DD`).
 - `sortTrades(trades, key, dir)` — keys `entryDate|exitDate|netPnl|symbol` default `entryDate` desc (chronological, newest first for table display). Stable, does not mutate input.
 
 ## Formatting (`src/lib/format.js`)

@@ -167,7 +167,17 @@ function App() {
   const saveTradeWithScreenshot = useCallback(
     async (values) => {
       const isEdit = form?.mode === 'edit';
-      const base = isEdit ? updateTrade(form.trade.id, values) : addTrade(values);
+      // New trades adopt the currency of the market you're viewing when you
+      // log them (India → INR, US → USD). Edited trades keep their native
+      // currency — unless you fixed the market field itself (e.g. entered
+      // under the wrong market), in which case the trade is re-tagged to
+      // the market you're viewing while you fix it.
+      const marketChanged = isEdit && form.trade.market !== values.market;
+      const base = marketChanged
+        ? updateTrade(form.trade.id, { ...values, currency })
+        : isEdit
+          ? updateTrade(form.trade.id, values)
+          : addTrade({ ...values, currency });
       if (!base?.ok) return base;
 
       const tradeId = isEdit ? form.trade.id : base.tradeId;
@@ -197,7 +207,7 @@ function App() {
       }
       return base;
     },
-    [form, addTrade, updateTrade],
+    [form, addTrade, updateTrade, currency],
   );
 
   const handleFormSave = useCallback(
@@ -226,6 +236,20 @@ function App() {
       });
     }
   }, []);
+
+  /** Delete a trade everywhere it lives: record, and its screenshot blob. */
+  const handleDeleteTrade = useCallback(
+    async (tradeId) => {
+      try {
+        await deleteScreenshot(tradeId);
+      } catch (err) {
+        // The record itself must still go; a leftover blob is harmless.
+        console.warn('trading-journal: screenshot cleanup failed', err);
+      }
+      return deleteTrade(tradeId);
+    },
+    [deleteTrade],
+  );
 
   const closeScreenshotView = useCallback(() => {
     setScreenshotView((current) => {
@@ -319,6 +343,7 @@ function App() {
               capital={marketCapital}
               onAddTrade={openNewTrade}
               onEditTrade={openEditTrade}
+              onDeleteTrade={handleDeleteTrade}
               onViewTrades={() => navigate('trades')}
               onOpenCalculator={() => navigate('calculator')}
             />
@@ -329,7 +354,7 @@ function App() {
               trades={trades ?? []}
               onAdd={openNewTrade}
               onEdit={openEditTrade}
-              onDelete={deleteTrade}
+              onDelete={handleDeleteTrade}
               onViewScreenshot={handleViewScreenshot}
             />
           )}

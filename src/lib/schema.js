@@ -2,16 +2,25 @@
  * Trade data model and schema utilities.
  *
  * Canonical field list (see CONTRACTS.md):
- *   id, symbol, market, direction, entryPrice, exitPrice, quantity,
- *   invested, entryDate, exitDate, fees, strategy, setup, notes,
+ *   id, symbol, market, currency, direction, entryPrice, exitPrice,
+ *   quantity, invested, entryDate, exitDate, fees, strategy, setup, notes,
  *   hasScreenshot, createdAt
  *
+ * `country` money is always the trade's own: a trade recorded in the US
+ * market is tagged 'USD' and formatted in dollars, an Indian market trade
+ * is tagged 'INR' and formatted in rupees. Legacy records without a
+ * currency normalize to 'INR' (the app's primary market).
  * `exitPrice === null` means the trade is open. Status is always derived,
  * never stored, so totals cannot drift from the raw records.
+ *
+ * `leverage` (optional, e.g. 5 = 5× margin) scales the auto-derived invested
+ * amount: invested = entryPrice × quantity ÷ leverage when `invested` is
+ * unset. Trade-level money fields use the trade's own `currency` tag.
  */
 
 export const MARKETS = ['stocks', 'futures', 'forex', 'crypto', 'options'];
 export const DIRECTIONS = ['long', 'short'];
+export const TRADE_CURRENCIES = ['INR', 'USD'];
 
 let n = 0;
 function randomId() {
@@ -58,6 +67,7 @@ export function normalizeTrade(raw) {
   const exitPrice = toNumberOrNull(raw.exitPrice);
   const fees = toNumberOrNull(raw.fees);
   const invested = toNumberOrNull(raw.invested);
+  const leverage = toNumberOrNull(raw.leverage);
 
   if (!symbol || entryPrice === null || quantity === null) return null;
 
@@ -65,11 +75,13 @@ export function normalizeTrade(raw) {
     id: typeof raw.id === 'string' && raw.id ? raw.id : randomId(),
     symbol,
     market: MARKETS.includes(raw.market) ? raw.market : 'stocks',
+    currency: TRADE_CURRENCIES.includes(raw.currency) ? raw.currency : 'INR',
     direction,
     entryPrice,
     exitPrice: exitPrice !== null ? exitPrice : null,
     quantity,
     invested: invested !== null ? invested : null,
+    leverage: leverage !== null ? leverage : null,
     entryDate: isValidDateString(raw.entryDate) ? raw.entryDate : null,
     exitDate: isValidDateString(raw.exitDate) ? raw.exitDate : null,
     fees: fees === null || fees < 0 ? 0 : fees,
@@ -139,6 +151,12 @@ export function validateTrade(trade) {
     }
   }
 
+  if (trade.leverage !== null && trade.leverage !== undefined) {
+    if (!Number.isFinite(trade.leverage) || trade.leverage < 1) {
+      errors.leverage = 'Leverage must be 1 or higher (e.g. 5 for 5× margin).';
+    }
+  }
+
   if (!isValidDateString(trade.entryDate)) {
     errors.entryDate = 'Entry date is required (YYYY-MM-DD).';
   }
@@ -163,6 +181,10 @@ export function validateTrade(trade) {
 
   if (trade.market && !MARKETS.includes(trade.market)) {
     errors.market = 'Select a valid market.';
+  }
+
+  if (trade.currency && !TRADE_CURRENCIES.includes(trade.currency)) {
+    errors.currency = 'Currency must be INR (Indian market) or USD (US market).';
   }
 
   return Object.keys(errors).length === 0 ? { ok: true, errors: {} } : { ok: false, errors };

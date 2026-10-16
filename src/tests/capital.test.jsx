@@ -11,6 +11,8 @@ import {
 import SettingsPage from '../components/SettingsPage.jsx';
 import Dashboard from '../components/Dashboard.jsx';
 import { CurrencyContext } from '../hooks/useCurrency.js';
+import { computeStats } from '../lib/calculations.js';
+import { createTrade } from '../lib/schema.js';
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -124,16 +126,35 @@ describe('dashboard uses the capital for the chosen market', () => {
     expect(screen.getByText('Set it in Settings')).toBeInTheDocument();
   });
 
-  it('shows return-on-capital from the market-specific capital', () => {
+  it('shows return-on-capital from the active market’s own ledger', () => {
+    // +50 USD net on 1,000 capital → exactly +5%, with an INR trade present
+    // that must NOT bleed into the US-market return.
+    const usdTrade = createTrade({
+      symbol: 'AAPL', market: 'stocks', direction: 'long',
+      entryPrice: 100, exitPrice: 110, quantity: 5,
+      entryDate: '2026-01-02', exitDate: '2026-01-03', currency: 'USD',
+    });
+    const inrTrade = createTrade({
+      symbol: 'NIFTY', market: 'futures', direction: 'long',
+      entryPrice: 100, exitPrice: 105, quantity: 2,
+      entryDate: '2026-01-02', exitDate: '2026-01-03', currency: 'INR',
+    });
     render(
       <CurrencyContext.Provider value={{ currency: 'USD', setCurrency: () => {} }}>
-        <Dashboard
-          stats={{ total: 1, open: 0, closed: 1, netPnl: 500, winRate: 100, profitFactor: Infinity, wins: 1, losses: 0, avgWin: 500, avgLoss: null }}
-          trades={[]}
-          capital={10000}
-        />
+        <Dashboard stats={computeStats([usdTrade, inrTrade])} trades={[usdTrade, inrTrade]} capital={1000} />
       </CurrencyContext.Provider>,
     );
     expect(screen.getByText('Return on capital: +5.0%')).toBeInTheDocument();
+    cleanup();
+
+    // Only the Indian trade exists: the US ledger is empty, so the US
+    // capital return must NOT reflect the rupee profit.
+    render(
+      <CurrencyContext.Provider value={{ currency: 'USD', setCurrency: () => {} }}>
+        <Dashboard stats={computeStats([inrTrade])} trades={[inrTrade]} capital={1000} />
+      </CurrencyContext.Provider>,
+    );
+    expect(screen.getByText('No US market trades')).toBeInTheDocument();
+    expect(screen.queryByText(/Return on capital:/)).not.toBeInTheDocument();
   });
 });

@@ -13,12 +13,11 @@
  */
 
 import { useMemo, useState } from 'react';
-import { computeStats, filterTrades, sortTrades } from '../lib/calculations.js';
+import { computeStats, computeCurrencyBreakdown, filterTrades, sortTrades } from '../lib/calculations.js';
 import { signedFormatCurrency } from '../lib/format.js';
 import { formatCurrency } from '../lib/format.js';
-import { useCurrency } from '../hooks/useCurrency.js';
 import EmptyState from './EmptyState.jsx';
-import { MARKETS } from '../lib/schema.js';
+import { MARKETS, TRADE_CURRENCIES } from '../lib/schema.js';
 import TradesTable from './TradesTable.jsx';
 
 const DEFAULT_FILTERS = {
@@ -27,6 +26,7 @@ const DEFAULT_FILTERS = {
   direction: 'all',
   strategy: 'all',
   market: 'all',
+  currency: 'all',
   status: 'all',
   dateFrom: '',
   dateTo: '',
@@ -59,7 +59,6 @@ function netPnlClass(net) {
 }
 
 export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onViewScreenshot }) {
-  const { currency } = useCurrency();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sort, setSort] = useState(DEFAULT_SORT);
 
@@ -92,6 +91,12 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
     return [sortedTrades, computeStats(sortedTrades)];
   }, [filtered, sortKey, sortDir]);
 
+  // Rupees and dollars are never summed: per-market ledgers over exactly
+  // the shown (filtered + sorted) set.
+  const shownBreakdown = useMemo(() => computeCurrencyBreakdown(shown), [shown]);
+  const stripCurrencies = TRADE_CURRENCIES.filter((c) => shownBreakdown[c].total > 0);
+  const CURRENCY_LABELS = { INR: 'India', USD: 'US' };
+
   const noTradesAtAll = trades.length === 0;
   const noMatches = !noTradesAtAll && shown.length === 0;
 
@@ -101,9 +106,20 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
         <div>
           <h1 className="page-title">Trades</h1>
           <p className="page-sub">
-            {shown.length} {shown.length === 1 ? 'trade' : 'trades'} shown · {shownStats.open} open · Invested{' '}
-            <span className="mono">{formatCurrency(shownStats.investedClosed ?? 0, currency)}</span> (closed) · Net P&L{' '}
-            <span className={`mono ${netPnlClass(shownStats.netPnl)}`}>{signedFormatCurrency(shownStats.netPnl, currency)}</span>
+            {shown.length} {shown.length === 1 ? 'trade' : 'trades'} shown · {shownStats.open} open
+            {stripCurrencies.length > 0 && stripCurrencies.map((code) => (
+              <span key={code}>
+                {' · '}
+                {CURRENCY_LABELS[code]}
+                {' net '}
+                <span className={`mono ${netPnlClass(shownBreakdown[code].netPnl)}`}>
+                  {signedFormatCurrency(shownBreakdown[code].netPnl, code)}
+                </span>
+                {' · invested '}
+                <span className="mono">{formatCurrency(shownBreakdown[code].investedClosed ?? 0, code)}</span>
+                {' (closed)'}
+              </span>
+            ))}
           </p>
         </div>
         <div className="section-actions">
@@ -179,6 +195,17 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
                     {MARKET_LABELS[name]}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor="trades-filter-currency">
+                Currency
+              </label>
+              <select id="trades-filter-currency" value={filters.currency} onChange={setFilter('currency')}>
+                <option value="all">All currencies</option>
+                <option value="INR">India (₹)</option>
+                <option value="USD">US ($)</option>
               </select>
             </div>
 

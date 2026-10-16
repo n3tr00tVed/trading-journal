@@ -1,6 +1,12 @@
 /**
  * Dashboard: summary stat cards, recent trades, and open positions.
  *
+ * Currency: money cards read the market you're viewing (sidebar switch) and
+ * print that market's own ledger via computeCurrencyBreakdown — India view
+ * shows ₹ totals for INR-tagged trades, US view shows $ totals for
+ * USD-tagged trades; the sub-line always reveals the other market's total
+ * when it has trades, since rupees and dollars are never summed.
+ *
  * Props:
  *   stats         computeStats(trades) result (see src/lib/calculations.js)
  *   trades        Trade[] (see src/lib/schema.js)
@@ -11,8 +17,9 @@
  * P&L correctness lives entirely in `stats` + lib helpers; this component
  * only formats and displays.
  */
-import { filterTrades, sortTrades, tradeNetPnl } from '../lib/calculations.js';
-import { isTradeOpen } from '../lib/schema.js';
+import { useMemo, useState } from 'react';
+import { computeCurrencyBreakdown, filterTrades, sortTrades, tradeInvested, tradeNetPnl } from '../lib/calculations.js';
+import { isTradeOpen, TRADE_CURRENCIES } from '../lib/schema.js';
 import {
   formatCurrency,
   formatDate,
@@ -24,12 +31,13 @@ import {
 import { useCurrency } from '../hooks/useCurrency.js';
 import StatCard from './StatCard.jsx';
 import EmptyState from './EmptyState.jsx';
+import ConfirmDialog from './ConfirmDialog.jsx';
 // Single stylesheet import for the whole component tree I own.
 import '../styles/app.css';
 
 function pnlClass(netPnl) {
   if (!Number.isFinite(netPnl) || netPnl === 0) return 'pnl-flat';
-  return netPnl > 0 ? 'pnl-pos' : 'pnl-neg';
+  return netPnl > 0 ? 'pnl-pos' : netPnl < 0 ? 'pnl-neg' : 'pnl-flat';
 }
 
 function directionBadge(direction) {
@@ -41,33 +49,58 @@ function directionBadge(direction) {
   );
 }
 
+/** StatCard that shows the active market's money, and the other market's
+ *  total in the sub-line when that ledger has trades (never merged). */
 export default function Dashboard({
   stats,
   trades = [],
   capital = null,
   onAddTrade,
   onEditTrade,
+  onDeleteTrade = () => {},
   onViewTrades,
   onOpenCalculator = () => {},
 }) {
+  // Recent-trade deletes get the same confirm guard as the full table:
+  // data loss is permanent (local-first), so a stray click must be safe.
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  function confirmDelete() {
+    if (pendingDelete) onDeleteTrade(pendingDelete.id);
+    setPendingDelete(null);
+  }
+
   const s = stats ?? {};
   const hasTrades = trades.length > 0;
   const { currency } = useCurrency();
 
+  const breakdown = useMemo(() => computeCurrencyBreakdown(trades), [trades]);
+  const active = TRADE_CURRENCIES.includes(currency) ? currency : 'INR';
+  const other = active === 'INR' ? 'USD' : 'INR';
+  const me = breakdown[active];
+  const them = breakdown[other];
+  const MARKET_LABELS = { INR: 'Indian market', USD: 'US market' };
+
   const recentTrades = sortTrades(trades, 'entryDate', 'desc').slice(0, 6);
   const openTrades = filterTrades(trades, { status: 'open' });
-  const netTone =
-    s.netPnl > 0 ? 'pos' : s.netPnl < 0 ? 'neg' : 'neutral';
 
-  // Capital card: set in Settings; shows live return-on-capital once known.
+  // Per-market ledgers: active market leads, other market surfaces in subs.
+  const leading = me.netPnl;
+  const netTone = leading > 0 ? 'pos' : leading < 0 ? 'neg' : 'neutral';
+  const otherNet = them.total > 0 ? signedFormatCurrency(them.netPnl, other) : null;
+
+  // Account capital is per-market (set in Settings): it pairs with the
+  // active market's own P&L for return-on-capital. An empty ledger claims
+  // nothing — no rupee profit inflates the US return, and vice versa.
   const hasCapital = Number.isFinite(capital) && capital > 0;
-  const returnOnCapital = hasCapital && Number.isFinite(s.netPnl)
-    ? (s.netPnl / capital) * 100
+  const hasClosedInActive = (me.closed ?? 0) > 0;
+  const returnOnCapital = hasCapital && hasClosedInActive && Number.isFinite(leading)
+    ? (leading / capital) * 100
     : null;
   const capitalCard = (
     <StatCard
       label="Account capital"
-      value={hasCapital ? formatCurrency(capital, currency) : '—'}
+      value={hasCapital ? formatCurrency(capital, active) : '—'}
       sub={
         !hasCapital
           ? 'Set it in Settings'
@@ -75,7 +108,7 @@ export default function Dashboard({
             ? 'No closed trades yet'
             : `Return on capital: ${returnOnCapital > 0 ? '+' : ''}${formatPercent(returnOnCapital)}`
       }
-      tone={hasCapital && s.netPnl > 0 ? 'pos' : hasCapital && s.netPnl < 0 ? 'neg' : 'neutral'}
+      tone={hasCapital && leading > 0 ? 'pos' : hasCapital && leading < 0 ? 'neg' : 'neutral'}
     />
   );
 
@@ -100,17 +133,22 @@ export default function Dashboard({
       {/* ---- Summary cards ---- */}
       <div className="stat-grid">
         <StatCard
-          label="Net P&L"
-          value={signedFormatCurrency(s.netPnl, currency)}
-          tone={netTone}
+          label={`Net P&L — ${MARKET_LABELS[active]}`}
+          value={
+            me.total > 0
+              ? signedFormatCurrency(leading, active)
+              : `No ${MARKET_LABELS[active]} trades`
+          }
+          tone={me.total > 0 ? netTone : 'neutral'}
+          sub={otherNet ? `${MARKET_LABELS[other]}: ${otherNet}` : undefined}
         />
         <StatCard
           label="Win rate"
-          value={s.winRate == null ? '—' : formatPercent(s.winRate)}
+          value={me.total > 0 && me.winRate != null ? formatPercent(me.winRate) : '—'}
         />
         <StatCard
           label="Profit factor"
-          value={s.profitFactor == null ? '—' : formatRatio(s.profitFactor)}
+          value={me.total > 0 && me.profitFactor != null ? formatRatio(me.profitFactor) : '—'}
         />
         <StatCard
           label="Total trades"
@@ -119,18 +157,29 @@ export default function Dashboard({
         />
         <StatCard
           label="Average win"
-          value={s.avgWin == null ? '—' : formatCurrency(s.avgWin, currency)}
-          tone={s.avgWin == null ? 'neutral' : 'pos'}
+          value={me.total > 0 && me.avgWin != null ? formatCurrency(me.avgWin, active) : '—'}
+          tone={me.avgWin != null ? 'pos' : 'neutral'}
+          sub={them.wins > 0 ? `${MARKET_LABELS[other]}: ${formatCurrency(them.avgWin ?? 0, other)}` : undefined}
         />
         <StatCard
           label="Average loss"
-          value={s.avgLoss == null ? '—' : formatCurrency(s.avgLoss, currency)}
-          tone={s.avgLoss == null ? 'neutral' : 'neg'}
+          value={me.total > 0 && me.avgLoss != null ? formatCurrency(me.avgLoss, active) : '—'}
+          tone={me.avgLoss != null ? 'neg' : 'neutral'}
+          sub={them.losses > 0 ? `${MARKET_LABELS[other]}: ${formatCurrency(them.avgLoss ?? 0, other)}` : undefined}
         />
         <StatCard
           label="Money invested"
-          value={formatCurrency(s.investedClosed ?? 0, currency)}
-          sub={(s.investedOpen ?? 0) > 0 ? `+ ${formatCurrency(s.investedOpen)} in open positions` : 'Closed trades'}
+          value={formatCurrency(me.investedClosed ?? 0, active)}
+          sub={
+            [
+              (me.investedOpen ?? 0) > 0
+                ? `+ ${formatCurrency(me.investedOpen, active)} in open positions`
+                : 'Closed trades',
+              (them.investedClosed ?? 0) > 0 || (them.investedOpen ?? 0) > 0
+                ? `${MARKET_LABELS[other]}: ${formatCurrency((them.investedClosed ?? 0) + (them.investedOpen ?? 0), other)}`
+                : null,
+            ].filter(Boolean).join(' · ')
+          }
         />
         {capitalCard}
       </div>
@@ -170,7 +219,8 @@ export default function Dashboard({
           </div>
           <table className="trades-table">
             <caption className="visually-hidden">
-              Six most recently opened trades. Use the Edit button in each row to
+              Six most recently opened trades. Amounts are shown in each
+              trade's own market currency. Use the Edit button in each row to
               modify a trade.
             </caption>
             <thead>
@@ -202,7 +252,7 @@ export default function Dashboard({
                         </>
                       ) : (
                         <span className={pnlClass(net)}>
-                          {signedFormatCurrency(net, currency) || '—'}
+                          {signedFormatCurrency(net, trade.currency) || '—'}
                         </span>
                       )}
                     </td>
@@ -215,6 +265,14 @@ export default function Dashboard({
                         aria-label={`Edit ${trade.symbol} trade entered ${formatDate(trade.entryDate)}`}
                       >
                         Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        aria-label={`Delete ${trade.symbol} trade entered ${formatDate(trade.entryDate)}`}
+                        onClick={() => setPendingDelete(trade)}
+                      >
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -240,6 +298,7 @@ export default function Dashboard({
                 <th scope="col">Symbol</th>
                 <th scope="col">Direction</th>
                 <th scope="col" className="num">Entry price</th>
+                <th scope="col" className="num">Invested</th>
                 <th scope="col">Entry date</th>
               </tr>
             </thead>
@@ -248,13 +307,25 @@ export default function Dashboard({
                 <tr key={trade.id}>
                   <td className="mono">{trade.symbol}</td>
                   <td>{directionBadge(trade.direction)}</td>
-                  <td className="mono num">{formatNumber(trade.entryPrice)}</td>
+                  <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
+                  <td className="mono num">{formatCurrency(tradeInvested(trade), trade.currency)}</td>
                   <td>{formatDate(trade.entryDate)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </section>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete ${pendingDelete.symbol} trade from ${formatDate(pendingDelete.entryDate)}?`}
+          body="This permanently removes the trade from this device."
+          confirmLabel="Delete trade"
+          danger
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
       )}
     </div>
   );

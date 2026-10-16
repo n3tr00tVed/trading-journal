@@ -7,6 +7,7 @@ const PLAIN = {
   id: 'e-1',
   symbol: 'AAPL',
   market: 'stocks',
+  currency: 'INR',
   direction: 'long',
   entryPrice: 10.5,
   exitPrice: 11,
@@ -27,7 +28,7 @@ afterEach(() => {
 
 describe('toCsv', () => {
   it('emits the exact fixed header row even for an empty list', () => {
-    expect(toCsv([])).toBe('id,symbol,market,direction,entryPrice,exitPrice,quantity,invested,entryDate,exitDate,fees,strategy,setup,notes,hasScreenshot,createdAt');
+    expect(toCsv([])).toBe('id,symbol,market,currency,direction,entryPrice,exitPrice,quantity,leverage,invested,entryDate,exitDate,fees,strategy,setup,notes,hasScreenshot,createdAt');
   });
 
   it('maps columns in fixed order and is deterministic', () => {
@@ -36,7 +37,7 @@ describe('toCsv', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(HEADER);
     expect(lines[1]).toBe(
-      'e-1,AAPL,stocks,long,10.5,11,1,,2026-02-01,2026-02-02,0.25,ORB,breakout,textbook,false,2026-02-01T10:00:00.000Z',
+      'e-1,AAPL,stocks,INR,long,10.5,11,1,,,2026-02-01,2026-02-02,0.25,ORB,breakout,textbook,false,2026-02-01T10:00:00.000Z',
     );
     expect(csv).toBe(toCsv([PLAIN])); // deterministic
     expect(toCsv([{ ...PLAIN }, { ...PLAIN }])).toBe(toCsv([{ ...PLAIN }, { ...PLAIN }]));
@@ -44,11 +45,11 @@ describe('toCsv', () => {
 
   it('null exitPrice → empty cell; exitPrice 0 is preserved as "0"', () => {
     const openRow = toCsv([{ ...PLAIN, exitPrice: null, exitDate: null }]).split('\n')[1].split(',');
-    expect(openRow[5]).toBe(''); // exitPrice cell (column 6) empty for an open trade
-    expect(openRow[5]).not.toBe('null');
+    expect(openRow[6]).toBe(''); // exitPrice cell (column 7) empty for an open trade
+    expect(openRow[6]).not.toBe('null');
 
     const zeroRow = toCsv([{ ...PLAIN, id: 'e-2', exitPrice: 0, exitDate: '2026-02-02' }]).split('\n')[1].split(',');
-    expect(zeroRow[5]).toBe('0');
+    expect(zeroRow[6]).toBe('0');
   });
 
   it('escapes commas, doubled quotes and newlines inside fields', () => {
@@ -65,7 +66,7 @@ describe('toCsv', () => {
     ]);
 
     expect(csv).toBe(
-      `${HEADER}\nm-1,AAPL,stocks,long,10.5,11,1,,2026-02-01,2026-02-02,0.25,"a,b","say ""hi""","line1\nline2, ""x""",false,2026-02-01T10:00:00.000Z`,
+      `${HEADER}\nm-1,AAPL,stocks,INR,long,10.5,11,1,,,2026-02-01,2026-02-02,0.25,"a,b","say ""hi""","line1\nline2, ""x""",false,2026-02-01T10:00:00.000Z`,
     );
   });
 });

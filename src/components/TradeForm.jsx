@@ -161,6 +161,7 @@ function draftFrom(initial) {
       quantity: '',
       entryDate: todayIso(),
       exitDate: '',
+      leverage: '',
       invested: '',
       fees: '0',
       strategy: '',
@@ -177,6 +178,7 @@ function draftFrom(initial) {
     entryPrice: initial.entryPrice === null || initial.entryPrice === undefined ? '' : String(initial.entryPrice),
     exitPrice: isOpen || initial.exitPrice === null || initial.exitPrice === undefined ? '' : String(initial.exitPrice),
     quantity: initial.quantity === null || initial.quantity === undefined ? '' : String(initial.quantity),
+    leverage: initial.leverage == null ? '' : String(initial.leverage),
     entryDate: initial.entryDate ?? '',
     exitDate: isOpen || !initial.exitDate ? '' : String(initial.exitDate),
     invested: initial.invested == null ? '' : String(initial.invested),
@@ -201,6 +203,7 @@ function buildValues(draft) {
     entryPrice: num(draft.entryPrice),
     exitPrice: isOpen ? null : trim(draft.exitPrice) === '' ? NaN : Number(trim(draft.exitPrice)),
     quantity: num(draft.quantity),
+    leverage: trim(draft.leverage) === '' ? null : Number(trim(draft.leverage)),
     invested: trim(draft.invested) === '' ? null : Number(trim(draft.invested)),
     entryDate: trim(draft.entryDate),
     exitDate: isOpen ? null : trim(draft.exitDate) === '' ? null : trim(draft.exitDate),
@@ -219,15 +222,19 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
   const [screenshotChange, setScreenshotChange] = useState(null); // { file?, removed? }
   const { currency } = useCurrency();
 
-  // Live "auto invested" preview: entry × quantity.
+  // The invested hint lives in the trade's own currency: an existing trade
+  // keeps its native tag, a new trade previews in the active market's money.
+  const displayCurrency = initial?.currency ?? currency;
+
+  // Live "auto invested" preview: entry × quantity ÷ leverage.
   const derivedInvested = useMemo(() => {
     const entry = Number(draft.entryPrice);
     const qty = Number(draft.quantity);
-    if (Number.isFinite(entry) && entry > 0 && Number.isFinite(qty) && qty > 0) {
-      return formatCurrency(entry * qty, currency);
-    }
-    return null;
-  }, [draft.entryPrice, draft.quantity, currency]);
+    const lev = Number(draft.leverage);
+    if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(qty) || qty <= 0) return null;
+    const divisor = Number.isFinite(lev) && lev >= 1 ? lev : 1;
+    return formatCurrency((entry * qty) / divisor, displayCurrency);
+  }, [draft.entryPrice, draft.quantity, draft.leverage, displayCurrency]);
 
   const set = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -447,6 +454,33 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
       </div>
 
       <div className="field">
+        <label className="label" htmlFor={`${id}-leverage`}>
+          Leverage
+        </label>
+        <input
+          id={`${id}-leverage`}
+          name="leverage"
+          type="number"
+          step="any"
+          min="1"
+          inputMode="decimal"
+          placeholder="e.g. 5 for 5×"
+          value={draft.leverage}
+          onChange={set('leverage')}
+          aria-describedby={`${id}-leverage-hint`}
+          {...errorProps('leverage')}
+        />
+        <p className="page-sub" id={`${id}-leverage-hint`}>
+          Optional. Margin trade? Money invested auto-divides by this (entry × qty ÷ {draft.leverage.trim() || 'leverage'}).
+        </p>
+        {err('leverage') && (
+          <span id={`${id}-leverage-error`} className="field-error" role="alert">
+            {err('leverage')}
+          </span>
+        )}
+      </div>
+
+      <div className="field">
         <label className="label" htmlFor={`${id}-invested`}>
           Money invested
         </label>
@@ -464,8 +498,8 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
         />
         <p className="page-sub" id={`${id}-invested-hint`}>
           {derivedInvested === null
-            ? 'Optional. Auto-uses entry price × quantity when left empty.'
-            : `Auto (entry × qty): ${derivedInvested}`}
+            ? 'Optional. Auto-uses entry price × quantity ÷ leverage when left empty.'
+            : `Auto: ${derivedInvested}`}
         </p>
         {err('invested') && (
           <span id={`${id}-invested-error`} className="field-error" role="alert">

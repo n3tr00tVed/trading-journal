@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeCurrencyBreakdown,
   computeStats,
   filterTrades,
   sortTrades,
   tradeGrossPnl,
   tradeInvested,
   tradeNetPnl,
+  tradeReturnOnInvested,
 } from '../lib/calculations.js';
-import { createTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
+import { createTrade, normalizeTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
 
 /** Helper: trade with a default valid symbol; fees handled explicitly. */
 function trade(fields) {
@@ -46,6 +48,92 @@ describe('tradeInvested', () => {
     const s = computeStats(trades);
     expect(s.investedClosed).toBe(150);
     expect(s.investedOpen).toBe(200);
+  });
+});
+
+describe('leverage', () => {
+  it('divides auto-derived invested by leverage when invested is unset', () => {
+    const t = trade({ direction: 'long', entryPrice: 400, exitPrice: 420, quantity: 10, leverage: 5 });
+    expect(tradeInvested(t)).toBe(800); // 4000 ÷ 5 margin
+    expect(tradeNetPnl(t)).toBe(200); // +20/pt × 10 pts
+    expect(tradeReturnOnInvested(t)).toBe(25); // 200 ÷ 800 margin
+  });
+
+  it('explicit invested beats the leverage derivation', () => {
+    const t = trade({ direction: 'long', entryPrice: 400, quantity: 10, leverage: 5, invested: 900 });
+    expect(tradeInvested(t)).toBe(900);
+  });
+
+  it('treats missing/tiny leverage as unlevered', () => {
+    const t = trade({ direction: 'long', entryPrice: 100, quantity: 2 });
+    expect(tradeInvested(t)).toBe(200);
+    // Sub-1 leverage is invalid input; the helper ignores it (÷1), while
+    // full validation rejects it at save time.
+    expect(tradeInvested({ ...t, leverage: 0.5 })).toBe(200);
+  });
+
+  it('rejects leverage below 1', () => {
+    const verdict = validateTrade(trade({ entryPrice: 100, quantity: 2, leverage: 0 }));
+    expect(verdict.ok).toBe(false);
+    expect(verdict.errors.leverage).toBeTruthy();
+  });
+});
+
+describe('per-trade currency tagging', () => {
+  it('normalizes unknown/missing currency to INR and keeps valid tags', () => {
+    expect(normalizeTrade({ symbol: 'X', entryPrice: 1, quantity: 1, entryDate: '2026-01-01' }).currency).toBe('INR');
+    expect(normalizeTrade({ symbol: 'X', entryPrice: 1, quantity: 1, currency: 'EUR' }).currency).toBe('INR');
+    expect(normalizeTrade({ symbol: 'X', entryPrice: 1, quantity: 1, currency: 'USD' }).currency).toBe('USD');
+  });
+
+  it('validates against unknown currency codes', () => {
+    // validateTrade is the guard against hand-crafted/disabled-tag records;
+    // normalizeTrade would have coerced these to INR before storage.
+    const verdict = validateTrade({
+      symbol: 'X',
+      entryPrice: 1,
+      quantity: 1,
+      entryDate: '2026-01-01',
+      currency: 'EUR',
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.errors.currency).toBeTruthy();
+  });
+
+  it('breakdowns never sum rupees and dollars', () => {
+    const trades = [
+      trade({ direction: 'long', entryPrice: 100, exitPrice: 110, quantity: 2, currency: 'INR' }), // +20 INR
+      trade({ direction: 'long', entryPrice: 100, exitPrice: 90, quantity: 1, currency: 'USD' }), // −10 USD
+      trade({ direction: 'long', entryPrice: 50, exitPrice: null, quantity: 4, currency: 'USD' }),
+    ];
+    const breakdown = computeCurrencyBreakdown(trades);
+    expect(breakdown.INR.netPnl).toBe(20);
+    expect(breakdown.INR.total).toBe(1);
+    expect(breakdown.USD.netPnl).toBe(-10);
+    expect(breakdown.USD.open).toBe(1);
+    expect(breakdown.USD.total).toBe(2);
+    expect(breakdown.USD.investedClosed).toBe(100);
+    // Zero-trade buckets still exist as empty ledgers.
+    expect(computeCurrencyBreakdown([]).USD.total).toBe(0);
+  });
+
+  it('profit factor stays per-market, even when INR wins and USD loses', () => {
+    const trades = [
+      trade({ direction: 'long', entryPrice: 100, exitPrice: 120, quantity: 1, currency: 'INR' }),
+      trade({ direction: 'long', entryPrice: 100, exitPrice: 50, quantity: 1, currency: 'USD' }),
+    ];
+    const breakdown = computeCurrencyBreakdown(trades);
+    expect(breakdown.INR.profitFactor).toBe(Infinity); // only wins in INR
+    expect(breakdown.USD.profitFactor).toBe(0); // only losses in USD
+  });
+
+  it('filters by native currency', () => {
+    const trades = [
+      trade({ direction: 'long', entryPrice: 100, quantity: 1, currency: 'INR', symbol: 'NIFTY' }),
+      trade({ direction: 'long', entryPrice: 100, quantity: 1, currency: 'USD', symbol: 'AAPL' }),
+    ];
+    expect(filterTrades(trades, { currency: 'USD' }).map((t) => t.symbol)).toEqual(['AAPL']);
+    expect(filterTrades(trades, { currency: 'all' })).toHaveLength(2);
   });
 });
 

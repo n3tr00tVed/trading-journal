@@ -11,6 +11,8 @@ const CLOSED = {
   exitPrice: 110,
   quantity: 2,
   invested: 200,
+  currency: 'INR',
+  leverage: null,
   entryDate: '2026-01-02',
   exitDate: '2026-01-03',
   fees: 1,

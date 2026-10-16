@@ -32,17 +32,36 @@ export function tradeNetPnl(trade) {
 }
 
 /**
- * Money invested in the trade: the explicit `invested` field when set
- * (margin, scaled positions, fee-inclusive cost bases), otherwise derived
- * from entry price × quantity. Open trades invest real money too.
+ * Money invested in the trade — the capital actually committed:
+ *   1. explicit `invested` field when set (margin outlays, scaled positions),
+ *   2. else (entry price × quantity) ÷ leverage for leveraged trades,
+ *   3. else plain entry price × quantity.
+ * Open trades invest real money too.
  */
 export function tradeInvested(trade) {
   if (!trade) return 0;
   if (isFiniteNumber(trade.invested) && trade.invested >= 0) return round2(trade.invested);
   if (isFiniteNumber(trade.entryPrice) && isFiniteNumber(trade.quantity)) {
-    return round2(trade.entryPrice * trade.quantity);
+    const leverage = isFiniteNumber(trade.leverage) && trade.leverage >= 1 ? trade.leverage : 1;
+    return round2((trade.entryPrice * trade.quantity) / leverage);
   }
   return 0;
+}
+
+/** Leverage label for UI: null when unlevered, '5×' style string otherwise. */
+export function tradeLeverageLabel(trade) {
+  if (trade && isFiniteNumber(trade.leverage) && trade.leverage > 1) {
+    return `${round2(trade.leverage)}×`;
+  }
+  return null;
+}
+
+/** Net P&L as a percent of the invested capital (closed trades only). */
+export function tradeReturnOnInvested(trade) {
+  if (!trade || isTradeOpen(trade)) return null;
+  const invested = tradeInvested(trade);
+  if (!Number.isFinite(invested) || invested <= 0) return null;
+  return round2((tradeNetPnl(trade) / invested) * 100);
 }
 
 function round2(value) {
@@ -127,12 +146,35 @@ export function computeStats(trades) {
 }
 
 /**
+ * Per-currency ledger: the same stat shape as computeStats but computed
+ * separately for each native trade currency ('INR' for Indian-market
+ * trades, 'USD' for US-market ones). Rupees and dollars must never be
+ * summed, so every money total is reported per bucket while ratios
+ * (win rate, profit factor) stay globally meaningful per bucket.
+ * Buckets with no trades report zeros / nulls rather than being omitted,
+ * so UI code can index breakdown['USD'] unconditionally.
+ */
+export function computeCurrencyBreakdown(trades) {
+  const all = Array.isArray(trades) ? trades : [];
+  const buckets = { INR: [], USD: [] };
+  for (const trade of all) {
+    const key = trade?.currency === 'USD' ? 'USD' : 'INR';
+    buckets[key].push(trade);
+  }
+  return {
+    INR: computeStats(buckets.INR),
+    USD: computeStats(buckets.USD),
+  };
+}
+
+/**
  * Filter trades. All criteria optional:
  *   query      matches symbol/strategy/setup/notes (case-insensitive substring)
  *   symbol     exact symbol match (case-insensitive)
  *   direction  'long' | 'short' | 'all'
  *   strategy   exact match (case-insensitive) or 'all'
  *   market     exact match or 'all'
+ *   currency   'INR' | 'USD' | 'all' — native trade currency tag
  *   status     'all' | 'open' | 'closed'
  *   dateFrom / dateTo — lexicographic YYYY-MM-DD comparison on entryDate
  * Does not mutate the input; returns a new array.
@@ -145,6 +187,7 @@ export function filterTrades(trades, criteria = {}) {
     direction = 'all',
     strategy = 'all',
     market = 'all',
+    currency = 'all',
     status = 'all',
     dateFrom,
     dateTo,
@@ -164,6 +207,7 @@ export function filterTrades(trades, criteria = {}) {
     if (direction !== 'all' && trade.direction !== direction) return false;
     if (strategy !== 'all' && (trade.strategy || '') !== strategy) return false;
     if (market !== 'all' && trade.market !== market) return false;
+    if (currency !== 'all' && trade.currency !== currency) return false;
     if (status === 'open' && !isTradeOpen(trade)) return false;
     if (status === 'closed' && isTradeOpen(trade)) return false;
     if (dateFrom && (trade.entryDate || '') < dateFrom) return false;

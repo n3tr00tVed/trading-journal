@@ -31,9 +31,15 @@ your own device. No accounts, no servers, nothing leaves your browser.
   capping by both risk and affordability. Lot sizes auto-fill for NSE/BSE
   index and MCX contracts (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
 - **Money invested** — every trade tracks how much capital it commits:
-  the form pre-fills it as entry × quantity (editable for margin or
-  scaled positions), and the journal reports total invested in closed
-  trades, plus capital sitting in open positions.
+  the form pre-fills it as entry × quantity ÷ **leverage** (set a leverage
+  like 5× for margin trades, or override the invested amount by hand), and
+  the journal reports total invested in closed trades, capital sitting in
+  open positions, and each closed trade's return on invested capital.
+- **Market currencies** — trades are tagged with the currency of the market
+  they were logged in: US trades profit in **dollars ($)**, Indian trades
+  profit in **rupees (₹)**, row by row. Rupees and dollars are never
+  summed; the dashboard leads with the market you're viewing and surfaces
+  the other market's total alongside it.
 - **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
   switch between **India (₹ INR)** and **US ($ USD)** markets from the
   sidebar dropdown (any view) or in Settings.
