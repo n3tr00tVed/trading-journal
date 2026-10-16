@@ -10,6 +10,7 @@ const CLOSED = {
   entryPrice: 100,
   exitPrice: 110,
   quantity: 2,
+  invested: 200,
   entryDate: '2026-01-02',
   exitDate: '2026-01-03',
   fees: 1,

@@ -127,6 +127,11 @@ export default function Dashboard({
           value={s.avgLoss == null ? '—' : formatCurrency(s.avgLoss, currency)}
           tone={s.avgLoss == null ? 'neutral' : 'neg'}
         />
+        <StatCard
+          label="Money invested"
+          value={formatCurrency(s.investedClosed ?? 0, currency)}
+          sub={(s.investedOpen ?? 0) > 0 ? `+ ${formatCurrency(s.investedOpen)} in open positions` : 'Closed trades'}
+        />
         {capitalCard}
       </div>
 

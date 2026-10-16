@@ -11,9 +11,11 @@
  * with validateTrade() from ../lib/schema.js before onSave is ever called.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { DIRECTIONS, MARKETS, validateTrade } from '../lib/schema.js';
 import { getScreenshot } from '../lib/screenshots.js';
+import { formatCurrency } from '../lib/format.js';
+import { useCurrency } from '../hooks/useCurrency.js';
 
 const EMPTY_EXIT_PRICE = 'Exit price is required for a closed trade.';
 
@@ -159,6 +161,7 @@ function draftFrom(initial) {
       quantity: '',
       entryDate: todayIso(),
       exitDate: '',
+      invested: '',
       fees: '0',
       strategy: '',
       setup: '',
@@ -176,6 +179,7 @@ function draftFrom(initial) {
     quantity: initial.quantity === null || initial.quantity === undefined ? '' : String(initial.quantity),
     entryDate: initial.entryDate ?? '',
     exitDate: isOpen || !initial.exitDate ? '' : String(initial.exitDate),
+    invested: initial.invested == null ? '' : String(initial.invested),
     fees: initial.fees === null || initial.fees === undefined ? '0' : String(initial.fees),
     strategy: initial.strategy ?? '',
     setup: initial.setup ?? '',
@@ -197,6 +201,7 @@ function buildValues(draft) {
     entryPrice: num(draft.entryPrice),
     exitPrice: isOpen ? null : trim(draft.exitPrice) === '' ? NaN : Number(trim(draft.exitPrice)),
     quantity: num(draft.quantity),
+    invested: trim(draft.invested) === '' ? null : Number(trim(draft.invested)),
     entryDate: trim(draft.entryDate),
     exitDate: isOpen ? null : trim(draft.exitDate) === '' ? null : trim(draft.exitDate),
     fees: trim(draft.fees) === '' ? 0 : Number(trim(draft.fees)),
@@ -212,6 +217,17 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [screenshotChange, setScreenshotChange] = useState(null); // { file?, removed? }
+  const { currency } = useCurrency();
+
+  // Live "auto invested" preview: entry × quantity.
+  const derivedInvested = useMemo(() => {
+    const entry = Number(draft.entryPrice);
+    const qty = Number(draft.quantity);
+    if (Number.isFinite(entry) && entry > 0 && Number.isFinite(qty) && qty > 0) {
+      return formatCurrency(entry * qty, currency);
+    }
+    return null;
+  }, [draft.entryPrice, draft.quantity, currency]);
 
   const set = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -426,6 +442,34 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
         {err('quantity') && (
           <span id={`${id}-quantity-error`} className="field-error" role="alert">
             {err('quantity')}
+          </span>
+        )}
+      </div>
+
+      <div className="field">
+        <label className="label" htmlFor={`${id}-invested`}>
+          Money invested
+        </label>
+        <input
+          id={`${id}-invested`}
+          name="invested"
+          type="number"
+          step="any"
+          min="0"
+          inputMode="decimal"
+          value={draft.invested}
+          onChange={set('invested')}
+          aria-describedby={`${id}-invested-hint`}
+          {...errorProps('invested')}
+        />
+        <p className="page-sub" id={`${id}-invested-hint`}>
+          {derivedInvested === null
+            ? 'Optional. Auto-uses entry price × quantity when left empty.'
+            : `Auto (entry × qty): ${derivedInvested}`}
+        </p>
+        {err('invested') && (
+          <span id={`${id}-invested-error`} className="field-error" role="alert">
+            {err('invested')}
           </span>
         )}
       </div>

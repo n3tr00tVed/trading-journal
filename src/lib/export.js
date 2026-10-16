@@ -16,6 +16,7 @@ export const CSV_COLUMNS = [
   'entryPrice',
   'exitPrice',
   'quantity',
+  'invested',
   'entryDate',
   'exitDate',
   'fees',

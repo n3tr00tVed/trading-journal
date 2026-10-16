@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { tradeNetPnl } from '../lib/calculations.js';
+import { tradeInvested, tradeNetPnl } from '../lib/calculations.js';
 import { isTradeOpen } from '../lib/schema.js';
 import { formatCurrency, formatDate, formatNumber, signedFormatCurrency } from '../lib/format.js';
 import { useCurrency } from '../hooks/useCurrency.js';
@@ -61,6 +61,7 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
               <th scope="col">Direction</th>
               <th scope="col" className="num">Qty</th>
               <th scope="col" className="num">Entry price</th>
+              <th scope="col" className="num">Invested</th>
               <th scope="col" className="num">Exit price</th>
               <th scope="col" className="num">Net P&amp;L</th>
               <th scope="col">Strategy</th>
@@ -94,6 +95,7 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
                     </span>
                   </td>
                   <td className="mono num">{formatNumber(trade.quantity)}</td>
+                  <td className="mono num">{formatCurrency(tradeInvested(trade), currency)}</td>
                   <td className="mono num">{formatCurrency(trade.entryPrice, currency)}</td>
                   <td className="mono num">{open ? '—' : formatCurrency(trade.exitPrice, currency)}</td>
                   <NetPnlCell trade={trade} currency={currency} />

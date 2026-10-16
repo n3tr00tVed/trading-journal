@@ -31,6 +31,20 @@ export function tradeNetPnl(trade) {
   return round2(tradeGrossPnl(trade) - fees);
 }
 
+/**
+ * Money invested in the trade: the explicit `invested` field when set
+ * (margin, scaled positions, fee-inclusive cost bases), otherwise derived
+ * from entry price × quantity. Open trades invest real money too.
+ */
+export function tradeInvested(trade) {
+  if (!trade) return 0;
+  if (isFiniteNumber(trade.invested) && trade.invested >= 0) return round2(trade.invested);
+  if (isFiniteNumber(trade.entryPrice) && isFiniteNumber(trade.quantity)) {
+    return round2(trade.entryPrice * trade.quantity);
+  }
+  return 0;
+}
+
 function round2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -75,6 +89,8 @@ export function computeStats(trades) {
   grossLoss = round2(grossLoss);
   const netPnl = round2(grossProfit - grossLoss);
   const totalFees = round2(closed.reduce((sum, t) => sum + (isFiniteNumber(t?.fees) ? t.fees : 0), 0));
+  const investedClosed = round2(closed.reduce((sum, t) => sum + tradeInvested(t), 0));
+  const investedOpen = round2(open.reduce((sum, t) => sum + tradeInvested(t), 0));
 
   const winRate = closed.length > 0 ? round2((wins / closed.length) * 100) : null;
 
@@ -105,6 +121,8 @@ export function computeStats(trades) {
     expectancy,
     largestWin,
     largestLoss,
+    investedClosed,
+    investedOpen,
   };
 }
 

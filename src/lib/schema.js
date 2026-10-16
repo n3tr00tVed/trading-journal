@@ -3,7 +3,8 @@
  *
  * Canonical field list (see CONTRACTS.md):
  *   id, symbol, market, direction, entryPrice, exitPrice, quantity,
- *   entryDate, exitDate, fees, strategy, setup, notes, hasScreenshot, createdAt
+ *   invested, entryDate, exitDate, fees, strategy, setup, notes,
+ *   hasScreenshot, createdAt
  *
  * `exitPrice === null` means the trade is open. Status is always derived,
  * never stored, so totals cannot drift from the raw records.
@@ -56,6 +57,7 @@ export function normalizeTrade(raw) {
   const quantity = toNumberOrNull(raw.quantity);
   const exitPrice = toNumberOrNull(raw.exitPrice);
   const fees = toNumberOrNull(raw.fees);
+  const invested = toNumberOrNull(raw.invested);
 
   if (!symbol || entryPrice === null || quantity === null) return null;
 
@@ -67,6 +69,7 @@ export function normalizeTrade(raw) {
     entryPrice,
     exitPrice: exitPrice !== null ? exitPrice : null,
     quantity,
+    invested: invested !== null ? invested : null,
     entryDate: isValidDateString(raw.entryDate) ? raw.entryDate : null,
     exitDate: isValidDateString(raw.exitDate) ? raw.exitDate : null,
     fees: fees === null || fees < 0 ? 0 : fees,
@@ -128,6 +131,12 @@ export function validateTrade(trade) {
 
   if (!Number.isFinite(trade.quantity) || trade.quantity <= 0) {
     errors.quantity = 'Quantity must be a number greater than 0.';
+  }
+
+  if (trade.invested !== null && trade.invested !== undefined) {
+    if (!Number.isFinite(trade.invested) || trade.invested < 0) {
+      errors.invested = 'Invested amount must be 0 or a positive number.';
+    }
   }
 
   if (!isValidDateString(trade.entryDate)) {

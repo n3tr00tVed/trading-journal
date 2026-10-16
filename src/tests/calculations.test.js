@@ -4,6 +4,7 @@ import {
   filterTrades,
   sortTrades,
   tradeGrossPnl,
+  tradeInvested,
   tradeNetPnl,
 } from '../lib/calculations.js';
 import { createTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
@@ -12,6 +13,41 @@ import { createTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
 function trade(fields) {
   return createTrade({ symbol: 'TEST', ...fields });
 }
+
+describe('tradeInvested', () => {
+  it('derives entry × quantity when no explicit invested is stored', () => {
+    const t = trade({ direction: 'long', entryPrice: 812.5, quantity: 4 });
+    expect(tradeInvested(t)).toBe(3250);
+    // open trades invest real money too
+    expect(tradeInvested({ ...t, exitPrice: null })).toBe(3250);
+  });
+
+  it('uses the explicit invested override when present', () => {
+    const t = trade({ direction: 'long', entryPrice: 100, quantity: 2, invested: 175 });
+    expect(tradeInvested(t)).toBe(175);
+  });
+
+  it('returns 0 instead of NaN for broken records', () => {
+    expect(tradeInvested({ direction: 'long' })).toBe(0);
+    expect(tradeInvested(null)).toBe(0);
+  });
+
+  it('rejects negative invested values', () => {
+    const verdict = validateTrade(trade({ direction: 'long', entryPrice: 100, quantity: 2, invested: -50 }));
+    expect(verdict.ok).toBe(false);
+    expect(verdict.errors.invested).toBeTruthy();
+  });
+
+  it('reports invested totals per open/closed split', () => {
+    const trades = [
+      trade({ direction: 'long', entryPrice: 100, exitPrice: 110, quantity: 2, invested: 150 }),
+      trade({ direction: 'long', entryPrice: 50, exitPrice: null, quantity: 4 }),
+    ];
+    const s = computeStats(trades);
+    expect(s.investedClosed).toBe(150);
+    expect(s.investedOpen).toBe(200);
+  });
+});
 
 describe('tradeNetPnl', () => {
   it('computes long P&L including fees', () => {

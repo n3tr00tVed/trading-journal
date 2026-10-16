@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react';
 import { computeStats, filterTrades, sortTrades } from '../lib/calculations.js';
 import { signedFormatCurrency } from '../lib/format.js';
+import { formatCurrency } from '../lib/format.js';
 import { useCurrency } from '../hooks/useCurrency.js';
 import EmptyState from './EmptyState.jsx';
 import { MARKETS } from '../lib/schema.js';
@@ -100,7 +101,8 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
         <div>
           <h1 className="page-title">Trades</h1>
           <p className="page-sub">
-            {shown.length} {shown.length === 1 ? 'trade' : 'trades'} shown · {shownStats.open} open · Net P&L{' '}
+            {shown.length} {shown.length === 1 ? 'trade' : 'trades'} shown · {shownStats.open} open · Invested{' '}
+            <span className="mono">{formatCurrency(shownStats.investedClosed ?? 0, currency)}</span> (closed) · Net P&L{' '}
             <span className={`mono ${netPnlClass(shownStats.netPnl)}`}>{signedFormatCurrency(shownStats.netPnl, currency)}</span>
           </p>
         </div>

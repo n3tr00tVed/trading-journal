@@ -30,6 +30,10 @@ your own device. No accounts, no servers, nothing leaves your browser.
   calculator answers how many shares — or whole F&O lots — you can buy,
   capping by both risk and affordability. Lot sizes auto-fill for NSE/BSE
   index and MCX contracts (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
+- **Money invested** — every trade tracks how much capital it commits:
+  the form pre-fills it as entry × quantity (editable for margin or
+  scaled positions), and the journal reports total invested in closed
+  trades, plus capital sitting in open positions.
 - **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
   switch between **India (₹ INR)** and **US ($ USD)** markets from the
   sidebar dropdown (any view) or in Settings.

@@ -18,7 +18,9 @@ authoritative conventions doc.)
   quantity: number,    // > 0
   entryDate: string,   // ISO "YYYY-MM-DD" (required)
   exitDate: string|null,  // ISO "YYYY-MM-DD"; required when closed
+  invested: number|null,  // money committed; null = derive as entryPrice × quantity
   fees: number,        // >= 0, default 0
+
   strategy: string,    // optional, free text, may be ""
   setup: string,       // optional, free text, may be ""
   notes: string,       // optional, may be ""
