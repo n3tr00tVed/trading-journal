@@ -58,7 +58,7 @@ function netPnlClass(net) {
   return net > 0 ? 'pnl-pos' : net < 0 ? 'pnl-neg' : 'pnl-flat';
 }
 
-export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onViewScreenshot }) {
+export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onViewScreenshot, livePrices = null }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sort, setSort] = useState(DEFAULT_SORT);
 
@@ -272,7 +272,13 @@ export default function TradesPage({ trades = [], onAdd, onEdit, onDelete, onVie
           action={{ label: 'Clear filters', onClick: resetFilters }}
         />
       ) : (
-        <TradesTable trades={shown} onEdit={onEdit} onDelete={onDelete} onViewScreenshot={onViewScreenshot} />
+        <TradesTable
+          trades={shown}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onViewScreenshot={onViewScreenshot}
+          livePrices={livePrices}
+        />
       )}
     </div>
   );

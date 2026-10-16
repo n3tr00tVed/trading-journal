@@ -59,6 +59,8 @@ export default function SettingsPage({
   onDisconnectSync,
   onSyncNow,
   onRestoreFromFolder,
+  livePrices = false,
+  onLivePricesChange,
 }) {
   const [status, setStatus] = useState(null); // { kind: 'ok'|'error'|'info', message, details? }
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -175,6 +177,25 @@ export default function SettingsPage({
             <option value="INR">INR — ₹ (Indian market)</option>
             <option value="USD">USD — $</option>
           </select>
+        </div>
+      </section>
+
+      <section className="card" aria-labelledby="settings-live-prices-heading">
+        <h2 id="settings-live-prices-heading">Live crypto prices</h2>
+        <p>
+          While on, open crypto positions quote roughly every 10 seconds from Binance&apos;s free public API so their
+          P&amp;L updates as the price moves. This is the app&apos;s only network use: it sends nothing but the symbols
+          being quoted, needs no account, and prices are never stored in your journal or synced to disk.
+          Other markets (stocks, futures, forex) have no free browser-friendly feed and stay manual.
+        </p>
+        <div className="checkbox-label">
+          <input
+            type="checkbox"
+            id="live-prices-checkbox"
+            checked={livePrices === true}
+            onChange={(event) => onLivePricesChange?.(event.target.checked)}
+          />
+          <label htmlFor="live-prices-checkbox">Fetch live prices for open crypto positions</label>
         </div>
       </section>
 

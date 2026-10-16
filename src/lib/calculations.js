@@ -64,6 +64,31 @@ export function tradeReturnOnInvested(trade) {
   return round2((tradeNetPnl(trade) / invested) * 100);
 }
 
+/**
+ * Unrealized (open-position) P&L from a live/last price:
+ *   long  → (last − entry) × quantity
+ *   short → (entry − last) × quantity
+ * Returns null when there is no usable price — null means "unknown";
+ * 0 is a real answer (price exactly at entry).
+ */
+export function unrealizedPnl(trade, lastPrice) {
+  if (!trade || !isFiniteNumber(lastPrice)) return null;
+  const entry = trade.entryPrice;
+  const qty = trade.quantity;
+  if (!isFiniteNumber(entry) || !isFiniteNumber(qty)) return null;
+  const diff = trade.direction === 'short' ? entry - lastPrice : lastPrice - entry;
+  return round2(diff * qty);
+}
+
+/** Unrealized P&L as a percent of invested capital (margin-aware), or null. */
+export function unrealizedReturnOnInvested(trade, lastPrice) {
+  const pnl = unrealizedPnl(trade, lastPrice);
+  if (pnl === null) return null;
+  const invested = tradeInvested(trade);
+  if (!Number.isFinite(invested) || invested <= 0) return null;
+  return round2((pnl / invested) * 100);
+}
+
 function round2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }

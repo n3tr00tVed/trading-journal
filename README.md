@@ -40,6 +40,13 @@ your own device. No accounts, no servers, nothing leaves your browser.
   profit in **rupees (₹)**, row by row. Rupees and dollars are never
   summed; the dashboard leads with the market you're viewing and surfaces
   the other market's total alongside it.
+- **Live P&L for open crypto positions** — an optional 10-second quote
+  pull from Binance's free public API keeps open crypto trades showing
+  unrealized P&L (+ % on margin) as the price moves, with an honest
+  status line ("Live every 10s · as of …" / paused / connection errors
+  spelled out). Quotes are held in memory only and never stored or
+  synced; toggle it off in Settings anytime (it's the app's only network
+  activity, and stock/futures/forex positions stay manual).
 - **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
   switch between **India (₹ INR)** and **US ($ USD)** markets from the
   sidebar dropdown (any view) or in Settings.

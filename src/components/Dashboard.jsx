@@ -22,12 +22,14 @@ import { computeCurrencyBreakdown, filterTrades, sortTrades, tradeInvested, trad
 import { isTradeOpen, TRADE_CURRENCIES } from '../lib/schema.js';
 import {
   formatCurrency,
+  formatDateTime,
   formatDate,
   formatNumber,
   formatPercent,
   formatRatio,
   signedFormatCurrency,
 } from '../lib/format.js';
+import { unrealizedPnl, unrealizedReturnOnInvested } from '../lib/calculations.js';
 import { useCurrency } from '../hooks/useCurrency.js';
 import StatCard from './StatCard.jsx';
 import EmptyState from './EmptyState.jsx';
@@ -49,12 +51,44 @@ function directionBadge(direction) {
   );
 }
 
+/** Honest status line for the live crypto feed (in the open positions header). */
+function LivePriceStatus({ live = null, symbolCount = 0 }) {
+  if (!live || symbolCount === 0) return null;
+  const { status, errors = {}, lastUpdated = null, POLL_MS } = live;
+  const failedSymbols = Object.keys(errors);
+  let label;
+  if (status === 'live' || status === 'partial') {
+    label = `Live every ${Math.round(POLL_MS / 1000)}s`;
+  } else if (status === 'error') {
+    label = failedSymbols.some((sym) => errors[sym] === 'offline')
+      ? 'Connection failed — retrying…'
+      : 'Quotes unavailable';
+  } else if (status === 'paused') {
+    label = 'Paused (tab hidden)';
+  } else {
+    label = 'Waiting for first price…';
+  }
+  const asOf = lastUpdated ? ` · as of ${formatDateTime(lastUpdated)}` : '';
+  const warn = status === 'error'
+    ? ` · ${failedSymbols.join(', ')}: ${failedSymbols.map((sym) => errors[sym]).join(', ')}`
+    : '';
+  return (
+    <span className="live-status" role="status">
+      <span className={`live-dot ${status === 'live' || status === 'partial' ? 'on' : ''}`} aria-hidden="true" />
+      {label}
+      {asOf}
+      {warn}
+    </span>
+  );
+}
+
 /** StatCard that shows the active market's money, and the other market's
  *  total in the sub-line when that ledger has trades (never merged). */
 export default function Dashboard({
   stats,
   trades = [],
   capital = null,
+  livePrices = null,
   onAddTrade,
   onEditTrade,
   onDeleteTrade = () => {},
@@ -83,6 +117,9 @@ export default function Dashboard({
 
   const recentTrades = sortTrades(trades, 'entryDate', 'desc').slice(0, 6);
   const openTrades = filterTrades(trades, { status: 'open' });
+  const openCryptoSymbols = openTrades
+    .filter((t) => t.market === 'crypto')
+    .map((t) => String(t.symbol || '').trim().toUpperCase());
 
   // Per-market ledgers: active market leads, other market surfaces in subs.
   const leading = me.netPnl;
@@ -283,35 +320,81 @@ export default function Dashboard({
         </section>
       )}
 
-      {/* ---- Open positions ---- */}
+      {/* ---- Open positions (live) ---- */}
       {hasTrades && s.open > 0 && (
         <section className="card" aria-labelledby="open-positions-title">
           <div className="section-header">
             <h2 className="section-title" id="open-positions-title">
               Open positions
             </h2>
+            <LivePriceStatus live={livePrices} symbolCount={openCryptoSymbols.length} />
             <span className="badge badge-open">{s.open} open</span>
           </div>
           <table className="trades-table">
+            <caption className="visually-hidden">
+              Currently open positions. Crypto rows show a live last price from
+              Binance's public API; unrealized P&L is estimated from it and is
+              not part of the realized Net P&L totals.
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Symbol</th>
                 <th scope="col">Direction</th>
                 <th scope="col" className="num">Entry price</th>
+                <th scope="col" className="num">Last price</th>
                 <th scope="col" className="num">Invested</th>
+                <th scope="col" className="num">Unrealized P&amp;L</th>
                 <th scope="col">Entry date</th>
               </tr>
             </thead>
             <tbody>
-              {openTrades.map((trade) => (
-                <tr key={trade.id}>
-                  <td className="mono">{trade.symbol}</td>
-                  <td>{directionBadge(trade.direction)}</td>
-                  <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
-                  <td className="mono num">{formatCurrency(tradeInvested(trade), trade.currency)}</td>
-                  <td>{formatDate(trade.entryDate)}</td>
-                </tr>
-              ))}
+              {openTrades.map((trade) => {
+                const quote = livePrices?.prices?.[String(trade.symbol).trim().toUpperCase()];
+                const lastPrice = quote?.price ?? null;
+                const pennies = unrealizedPnl(trade, lastPrice);
+                const roiOnMargin = unrealizedReturnOnInvested(trade, lastPrice);
+                const isCrypto = trade.market === 'crypto';
+                return (
+                  <tr key={trade.id}>
+                    <td className="mono">{trade.symbol}</td>
+                    <td>{directionBadge(trade.direction)}</td>
+                    <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
+                    <td className="mono num">
+                      {isCrypto ? (
+                        lastPrice != null ? (
+                          <span className="live-cell">
+                            <span className="live-dot" aria-hidden="true" />
+                            {formatCurrency(lastPrice, trade.currency)}
+                          </span>
+                        ) : (
+                          <span className="muted">waiting…</span>
+                        )
+                      ) : (
+                        <span className="muted" title={`No live feed for ${trade.market} — note the price you exit at`}>
+                          manual
+                        </span>
+                      )}
+                    </td>
+                    <td className="mono num">{formatCurrency(tradeInvested(trade), trade.currency)}</td>
+                    <td className={`mono num ${pennies == null ? '' : pennies > 0 ? 'pnl-pos' : pennies < 0 ? 'pnl-neg' : 'pnl-flat'}`}>
+                      {pennies == null ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <>
+                          {signedFormatCurrency(pennies, trade.currency)}
+                          {roiOnMargin != null && (
+                            <span className="pnl-sub">
+                              {' '}
+                              {`${roiOnMargin > 0 ? '+' : ''}${roiOnMargin}% on margin`}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td>{formatDate(trade.entryDate)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </section>

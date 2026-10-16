@@ -961,3 +961,48 @@ button {
   font-family: var(--mono);
   font-weight: 400;
 }
+
+/* ---- Live crypto prices (open positions) ---- */
+
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.live-dot.on {
+  background: var(--pos, #2ecc71);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot.on {
+    animation: none;
+  }
+}

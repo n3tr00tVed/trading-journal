@@ -18,6 +18,8 @@ import {
   tradeLeverageLabel,
   tradeNetPnl,
   tradeReturnOnInvested,
+  unrealizedPnl,
+  unrealizedReturnOnInvested,
 } from '../lib/calculations.js';
 import { isTradeOpen } from '../lib/schema.js';
 import { formatCurrency, formatDate, formatNumber, signedFormatCurrency } from '../lib/format.js';
@@ -27,32 +29,48 @@ function capitalize(value) {
   return typeof value === 'string' && value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
 }
 
-/** Net P&L cell: '—' + Open badge for open trades, native-currency signed amount + return-on-invested otherwise. */
-function NetPnlCell({ trade }) {
+/** Net P&L cell: Open badge (+ live unrealized when a price exists) for open trades; signed realized amount otherwise. */
+function NetPnlCell({ trade, price = null }) {
   if (isTradeOpen(trade)) {
+    const floating = unrealizedPnl(trade, price);
+    const roi = unrealizedReturnOnInvested(trade, price);
     return (
       <td className="mono num">
-        <span aria-hidden="true">—</span>
         <span className="badge badge-open">Open</span>
+        {floating != null && (
+          <>
+            {' '}
+            <span className={floating > 0 ? 'pnl-pos' : floating < 0 ? 'pnl-neg' : 'pnl-flat'}>
+              <span className="visually-hidden">Unrealized: </span>
+              {signedFormatCurrency(floating, trade.currency)}
+            </span>
+            {roi != null && (
+              <span className="pnl-sub">
+                {' '}
+                {`${roi > 0 ? '+' : ''}${roi}% on margin`}
+              </span>
+            )}
+          </>
+        )}
       </td>
     );
   }
   const net = tradeNetPnl(trade);
-  const roi = tradeReturnOnInvested(trade);
+  const roiClosed = tradeReturnOnInvested(trade);
   return (
     <td className={`mono num ${net > 0 ? 'pnl-pos' : net < 0 ? 'pnl-neg' : 'pnl-flat'}`}>
       {signedFormatCurrency(net, trade.currency)}
-      {roi != null && (
+      {roiClosed != null && (
         <span className="pnl-sub" aria-label="Return on invested capital (margin)">
           {' '}
-          {`${roi > 0 ? '+' : ''}${roi}% on invested`}
+          {`${roiClosed > 0 ? '+' : ''}${roiClosed}% on invested`}
         </span>
       )}
     </td>
   );
 }
 
-export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot }) {
+export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot, livePrices = null }) {
   const [pendingDelete, setPendingDelete] = useState(null);
 
   function confirmDelete() {
@@ -85,9 +103,12 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
             </tr>
           </thead>
           <tbody>
-            {trades.map((trade) => {
+              {trades.map((trade) => {
               const open = isTradeOpen(trade);
               const leverageTag = tradeLeverageLabel(trade);
+              const quote = open && livePrices
+                ? livePrices.prices?.[String(trade.symbol).trim().toUpperCase()]
+                : null;
               return (
                 <tr key={trade.id}>
                   <td className="mono">
@@ -122,7 +143,7 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
                   <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
                   <td className="mono num">{formatCurrency(tradeInvested(trade), trade.currency)}</td>
                   <td className="mono num">{open ? '—' : formatCurrency(trade.exitPrice, trade.currency)}</td>
-                  <NetPnlCell trade={trade} />
+                  <NetPnlCell trade={trade} price={open && quote ? quote.price : null} />
                   <td>{trade.strategy || '—'}</td>
                   <td>{formatDate(trade.entryDate)}</td>
                   <td className="num">

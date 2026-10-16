@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTrades } from './hooks/useTrades.js';
+import { useLivePrices } from './hooks/useLivePrices.js';
 import { loadCapitals, saveCapitals } from './lib/capitalStorage.js';
 import { loadRules } from './lib/rulesStorage.js';
 import { CurrencyContext } from './hooks/useCurrency.js';
-import { loadCurrency, saveCurrency } from './lib/settingsStorage.js';
+import { loadCurrency, saveCurrency, loadLivePrices, saveLivePrices } from './lib/settingsStorage.js';
 import { putScreenshot, deleteScreenshot, getScreenshot } from './lib/screenshots.js';
 import {
   connectJournalDirectory,
@@ -47,7 +48,13 @@ function App() {
   const [toast, setToast] = useState(null); // { message, tone }
   const [capitals, setCapitals] = useState(() => loadCapitals()); // { INR, USD }
   const [currency, setCurrency] = useState(() => loadCurrency());
+  const [livePrices, setLivePrices] = useState(() => loadLivePrices());
   const marketCapital = capitals?.[currency] ?? null;
+
+  // ---- live crypto prices ----
+  // In-memory quotes from Binance's public API (see src/lib/marketData.js);
+  // the hook no-ops entirely when there are no open crypto trades.
+  const live = useLivePrices(trades, { enabled: livePrices === true });
 
   // ---- trades_data folder sync ----
   const syncSupported = supportedDirectorySync();
@@ -266,6 +273,17 @@ function App() {
     if (saveCurrency(next)) setCurrency(next);
   }, []);
 
+  /** Live crypto price feed toggle (Settings). */
+  const changeLivePrices = useCallback((next) => {
+    if (saveLivePrices(next === true)) {
+      setLivePrices(next === true);
+      setToast({
+        message: next === true ? 'Live crypto prices on (Binance public API).' : 'Live crypto prices off.',
+        tone: 'pos',
+      });
+    }
+  }, []);
+
   const handleSaveCapitals = useCallback(
     (map) => {
       const saved = saveCapitals(map);
@@ -341,6 +359,7 @@ function App() {
               stats={stats}
               trades={trades ?? []}
               capital={marketCapital}
+              livePrices={live}
               onAddTrade={openNewTrade}
               onEditTrade={openEditTrade}
               onDeleteTrade={handleDeleteTrade}
@@ -352,6 +371,7 @@ function App() {
           {view === 'trades' && (
             <TradesPage
               trades={trades ?? []}
+              livePrices={live}
               onAdd={openNewTrade}
               onEdit={openEditTrade}
               onDelete={handleDeleteTrade}
@@ -382,6 +402,8 @@ function App() {
               onDisconnectSync={handleDisconnectSync}
               onSyncNow={syncNowUser}
               onRestoreFromFolder={handleRestoreFromFolder}
+              livePrices={livePrices}
+              onLivePricesChange={changeLivePrices}
             />
           )}
         </main>

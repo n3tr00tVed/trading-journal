@@ -97,6 +97,34 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
 - `formatCurrency/signedFormatCurrency(value, currency)` take the currency
   explicitly everywhere; INR renders with `en-IN` grouping (₹1,23,456).
 
+## Live crypto prices (`src/lib/marketData.js` + `src/hooks/useLivePrices.js`)
+
+- The app's ONLY network feature, and strictly read-only: open crypto
+  positions are quoted from Binance's public `/api/v3/ticker/price` (no
+  key, no auth). Requests carry nothing but the symbols; responses are
+  price numbers kept in memory only — never persisted, never exported,
+  never synced to `trades_data`.
+- Symbol mapping `toBinanceSymbol`: `BTC`, `BTC/USDT`, `BTC-USD`,
+  `BTCUSD` → `BTCUSDT` (base + USDT pool). Non-crypto markets resolve to
+  no feed (browsers have no free CORS-legal quote source for them) and
+  show "manual".
+- `fetchCryptoPrices(symbols)` batches one request, then falls back to
+  per-symbol probes when the batch is rejected, so one unlisted coin
+  cannot blind the rest. Every failure surfaces honestly
+  (`'offline'` / `'not listed on Binance'`) — never a fabricated price.
+- Unresolved/failed symbols show `—`; `realized` totals NEVER include
+  unrealized amounts: `Net P&L` and every aggregate in `computeStats`
+  remain closed-trades-only. `unrealizedPnl(trade, lastPrice)` =
+  `(±(last − entry)) × qty` (sign by direction), null when no price; 0 at
+  entry is a real answer. `unrealizedReturnOnInvested` divides by the
+  margin-aware invested amount.
+- Polling (`useLivePrices`): 10s interval, only while the app has open
+  crypto positions, zero requests when the tab is hidden (status
+  `paused`, restored on return) or the toggle is off
+  (`trading-journal:settings:v1` → `livePrices`, default true, checkbox
+  in Settings). First tick is immediate so P&L appears within seconds of
+  page load.
+
 ## Position-size calculator (`src/lib/calculator.js` + `CalculatorPage`)
 
 - Pure `positionSizing({ capital, riskPercent, entryPrice, stopLoss,
