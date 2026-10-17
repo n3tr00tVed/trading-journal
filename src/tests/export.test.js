@@ -28,7 +28,7 @@ afterEach(() => {
 
 describe('toCsv', () => {
   it('emits the exact fixed header row even for an empty list', () => {
-    expect(toCsv([])).toBe('id,symbol,market,currency,direction,entryPrice,exitPrice,quantity,leverage,invested,entryDate,exitDate,fees,strategy,setup,notes,hasScreenshot,createdAt');
+    expect(toCsv([])).toBe('id,symbol,market,currency,direction,entryPrice,exitPrice,quantity,leverage,invested,takeProfit,stopLoss,entryDate,exitDate,fees,strategy,setup,notes,hasScreenshot,createdAt');
   });
 
   it('maps columns in fixed order and is deterministic', () => {
@@ -37,7 +37,7 @@ describe('toCsv', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(HEADER);
     expect(lines[1]).toBe(
-      'e-1,AAPL,stocks,INR,long,10.5,11,1,,,2026-02-01,2026-02-02,0.25,ORB,breakout,textbook,false,2026-02-01T10:00:00.000Z',
+      'e-1,AAPL,stocks,INR,long,10.5,11,1,,,,,2026-02-01,2026-02-02,0.25,ORB,breakout,textbook,false,2026-02-01T10:00:00.000Z',
     );
     expect(csv).toBe(toCsv([PLAIN])); // deterministic
     expect(toCsv([{ ...PLAIN }, { ...PLAIN }])).toBe(toCsv([{ ...PLAIN }, { ...PLAIN }]));
@@ -66,7 +66,7 @@ describe('toCsv', () => {
     ]);
 
     expect(csv).toBe(
-      `${HEADER}\nm-1,AAPL,stocks,INR,long,10.5,11,1,,,2026-02-01,2026-02-02,0.25,"a,b","say ""hi""","line1\nline2, ""x""",false,2026-02-01T10:00:00.000Z`,
+      `${HEADER}\nm-1,AAPL,stocks,INR,long,10.5,11,1,,,,,2026-02-01,2026-02-02,0.25,"a,b","say ""hi""","line1\nline2, ""x""",false,2026-02-01T10:00:00.000Z`,
     );
   });
 });

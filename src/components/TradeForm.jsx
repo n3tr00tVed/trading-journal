@@ -163,6 +163,8 @@ function draftFrom(initial) {
       exitDate: '',
       leverage: '',
       invested: '',
+      takeProfit: '',
+      stopLoss: '',
       fees: '0',
       strategy: '',
       setup: '',
@@ -182,6 +184,8 @@ function draftFrom(initial) {
     entryDate: initial.entryDate ?? '',
     exitDate: isOpen || !initial.exitDate ? '' : String(initial.exitDate),
     invested: initial.invested == null ? '' : String(initial.invested),
+    takeProfit: initial.takeProfit == null ? '' : String(initial.takeProfit),
+    stopLoss: initial.stopLoss == null ? '' : String(initial.stopLoss),
     fees: initial.fees === null || initial.fees === undefined ? '0' : String(initial.fees),
     strategy: initial.strategy ?? '',
     setup: initial.setup ?? '',
@@ -205,6 +209,8 @@ function buildValues(draft) {
     quantity: num(draft.quantity),
     leverage: trim(draft.leverage) === '' ? null : Number(trim(draft.leverage)),
     invested: trim(draft.invested) === '' ? null : Number(trim(draft.invested)),
+    takeProfit: trim(draft.takeProfit) === '' ? null : Number(trim(draft.takeProfit)),
+    stopLoss: trim(draft.stopLoss) === '' ? null : Number(trim(draft.stopLoss)),
     entryDate: trim(draft.entryDate),
     exitDate: isOpen ? null : trim(draft.exitDate) === '' ? null : trim(draft.exitDate),
     fees: trim(draft.fees) === '' ? 0 : Number(trim(draft.fees)),
@@ -235,6 +241,21 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
     const divisor = Number.isFinite(lev) && lev >= 1 ? lev : 1;
     return formatCurrency((entry * qty) / divisor, displayCurrency);
   }, [draft.entryPrice, draft.quantity, draft.leverage, displayCurrency]);
+
+  // Live TP/SL outcome preview: what each level is worth in money.
+  const tpSlPreview = useMemo(() => {
+    const entry = Number(draft.entryPrice);
+    const qty = Number(draft.quantity);
+    const tp = Number(draft.takeProfit);
+    const sl = Number(draft.stopLoss);
+    const short = draft.direction === 'short';
+    const outcome = (level) => {
+      if (!Number.isFinite(level) || level <= 0 || !Number.isFinite(entry) || entry <= 0 || !Number.isFinite(qty) || qty <= 0) return null;
+      const diff = short ? entry - level : level - entry;
+      return formatCurrency(diff * qty, displayCurrency);
+    };
+    return { tp: outcome(tp), sl: outcome(sl) };
+  }, [draft.entryPrice, draft.quantity, draft.takeProfit, draft.stopLoss, draft.direction, displayCurrency]);
 
   const set = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -507,6 +528,67 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
           </span>
         )}
       </div>
+
+      <div className="field-row">
+        <div className="field">
+          <label className="label" htmlFor={`${id}-takeProfit`}>
+            Take profit 🎯
+          </label>
+          <input
+            id={`${id}-takeProfit`}
+            name="takeProfit"
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            placeholder="Target price"
+            value={draft.takeProfit}
+            onChange={set('takeProfit')}
+            aria-describedby={`${id}-tp-hint`}
+            {...errorProps('takeProfit')}
+          />
+          <p className="page-sub" id={`${id}-tp-hint`}>
+            {tpSlPreview?.tp != null ? `Worth ${tpSlPreview.tp} at target` : 'Price to exit in profit'}
+          </p>
+          {err('takeProfit') && (
+            <span id={`${id}-takeProfit-error`} className="field-error" role="alert">
+              {err('takeProfit')}
+            </span>
+          )}
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor={`${id}-stopLoss`}>
+            Stop loss 🛑
+          </label>
+          <input
+            id={`${id}-stopLoss`}
+            name="stopLoss"
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            placeholder="Max loss price"
+            value={draft.stopLoss}
+            onChange={set('stopLoss')}
+            aria-describedby={`${id}-sl-hint`}
+            {...errorProps('stopLoss')}
+          />
+          <p className="page-sub" id={`${id}-sl-hint`}>
+            {tpSlPreview?.sl != null ? `Worth ${tpSlPreview.sl} at stop` : 'Price to exit at a loss'}
+          </p>
+          {err('stopLoss') && (
+            <span id={`${id}-stopLoss-error`} className="field-error" role="alert">
+              {err('stopLoss')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <p className="page-sub">
+        Optional price levels for planned exits. For a long trade, take profit sits above entry and
+        stop loss below; for a short trade, the reverse.
+      </p>
 
       <div className="field">
         <label className="label" htmlFor={`${id}-entryDate`}>

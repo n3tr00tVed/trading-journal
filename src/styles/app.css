@@ -424,6 +424,19 @@ button {
   border-color: rgba(59, 130, 246, 0.35);
 }
 
+/* Sentiment badges */
+.badge-bullish {
+  color: var(--pos);
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.badge-bearish {
+  color: var(--neg);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
 /* ---- Buttons ---- */
 
 .btn {
@@ -690,6 +703,20 @@ button {
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-5);
+}
+
+/* Two form fields side by side (TP/SL pair) */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .checkbox-label {
@@ -993,6 +1020,53 @@ button {
   font-size: 11px;
   font-family: var(--mono);
   font-weight: 400;
+}
+
+/* TP/SL cell in the trades table */
+.tpsl-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ---- Overall news sentiment strip ---- */
+
+.news-sentiment {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2, 8px);
+}
+
+.news-sentiment-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--space-3, 12px);
+}
+
+.news-sentiment-market {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.news-sentiment-card.sentiment-bullish {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.news-sentiment-card.sentiment-bearish {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.news-sentiment-counts {
+  font-size: 11px;
+  width: 100%;
+  color: var(--muted);
 }
 
 /* ---- Live crypto prices (open positions) ---- */

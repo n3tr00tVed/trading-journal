@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NEWS_SOURCES,
+  classifySentiment,
   clearNewsCache,
   fetchNews,
+  overallSentiment,
   parseFeedXml,
   publishedDate,
   sourcesForRegion,
@@ -108,18 +110,124 @@ describe('sourcesForRegion', () => {
   });
 });
 
+describe('classifySentiment', () => {
+  it('reads word-boundary bullish and bearish cues', () => {
+    expect(classifySentiment('Nifty rises on banking strength')).toBe('bullish');
+    expect(classifySentiment('Banks rally as profits surge')).toBe('bullish');
+    expect(classifySentiment('Rupee slumps, markets fall on weak data')).toBe('bearish');
+    expect(classifySentiment('Fed holds rates; markets barely moved')).toBe('neutral');
+    expect(classifySentiment('')).toBe('neutral');
+    expect(classifySentiment(null)).toBe('neutral');
+  });
+
+  it('does not fire on substrings (update / startup / withdrawal)', () => {
+    expect(classifySentiment('RBI to update guidelines next week')).toBe('neutral');
+    expect(classifySentiment('Startup funding trends steady')).toBe('neutral');
+    expect(classifySentiment('Withdrawal rules eased')).toBe('neutral');
+  });
+
+  it('mixed bullish and bearish cues in one headline cancel out', () => {
+    expect(classifySentiment('Markets rise in the morning, fall by close')).toBe('neutral');
+  });
+});
+
+describe('overallSentiment', () => {
+  it('aggregates per region and calls the overall lean', () => {
+    const items = [
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'CRYPTO', sentiment: 'bullish' },
+      { region: 'CRYPTO', sentiment: 'neither-key' },
+    ];
+    const s = overallSentiment(items);
+    expect(s.IN.tone).toBe('bullish');
+    expect(s.IN.label).toBe('Likely bullish');
+    expect(s.US.tone).toBe('bearish');
+    expect(s.US.label).toBe('Likely bearish');
+    expect(s.US.bullish).toBe(0);
+    expect(s.US.bearish).toBe(3);
+    // 1 bullish + 1 uncategorized → below the minimum sample, honest fallback.
+    expect(s.CRYPTO.tone).toBe('mixed');
+    expect(s.CRYPTO.label).toBe('Mixed signals');
+    // All regions combined: 4 bullish vs 3 bearish with 7 classified → bullish.
+    expect(s.all.tone).toBe('bullish');
+    expect(s.all.total).toBe(8);
+  });
+
+  it('withholds a directional verdict under MIN_SENTIMENT_SAMPLE classified headlines', () => {
+    const s = overallSentiment([
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'IN', sentiment: 'bullish' },
+    ]);
+    // 2 classified < 3 → not a trend; refuse "likely bullish".
+    expect(s.IN.bullish).toBe(2);
+    expect(s.IN.tone).toBe('mixed');
+    expect(s.IN.label).toBe('Mixed signals');
+  });
+
+  it('all-neutral feeds stay neutral and ties count as mixed', () => {
+    const neutral = overallSentiment([
+      { region: 'US', sentiment: 'neutral' },
+      { region: 'US', sentiment: 'neutral' },
+      { region: 'US', sentiment: 'neutral' },
+    ]);
+    expect(neutral.US.tone).toBe('neutral');
+    expect(neutral.US.label).toBe('No clear signals');
+
+    const tie = overallSentiment([
+      { region: 'US', sentiment: 'bullish' },
+      { region: 'US', sentiment: 'bullish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bearish' },
+    ]);
+    expect(tie.US.tone).toBe('mixed');
+  });
+
+  it('empty or junk input yields zeroed blank ledgers for every region', () => {
+    const empty = overallSentiment([]);
+    for (const key of ['all', 'IN', 'US', 'CRYPTO']) {
+      expect(empty[key].total).toBe(0);
+      expect(empty[key].tone).toBe('neutral');
+      expect(empty[key].label).toBe('No clear signals');
+    }
+    const junk = overallSentiment(null);
+    expect(junk.all.total).toBe(0);
+  });
+});
+
 describe('fetchNews', () => {
   it('fetches through the relay, parses, sorts newest first, and caches', async () => {
-    fetch
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }) // et-markets (IN)
-      .mockResolvedValueOnce({ ok: true, text: async () => ATOM_FIXTURE }) // gn-india (IN)
-      .mockResolvedValueOnce({ ok: true, text: async () => ATOM_FIXTURE }) // cnbc (US)
-      .mockResolvedValueOnce({ ok: true, text: async () => ATOM_FIXTURE }) // gn-us (US)
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }) // coindesk (CRYPTO)
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }); // gn-crypto (CRYPTO)
+    // Per-URL mocks (not per-call): each source tries the rss2json path
+    // first (no `json` on the stub → treated as unusable → falls through)
+    // then the XML relays, so every source consumes 2 calls when it
+    // succeeds on the first relay.
+    fetch.mockImplementation(async (url) => {
+      if (url.startsWith('https://api.rss2json.com/')) {
+        return { ok: true, text: async () => '', json: async () => ({ status: 'error' }) };
+      }
+      if (url.includes('api.codetabs.com')) {
+        // CodeTabs serves the hosts AllOrigins hiccups on: RSS for
+        // ET/CoinDesk/crypto-topic, ATOM for the Google News business
+        // feeds it fronts.
+        if (url.includes('economictimes') || url.includes('coindesk')) {
+          return { ok: true, text: async () => RSS_FIXTURE };
+        }
+        return { ok: true, text: async () => ATOM_FIXTURE };
+      }
+      if (url.includes('economictimes') || url.includes('coindesk') || url.includes('bitcoin+OR+ethereum')) {
+        return { ok: false }; // AllOrigins hiccups on these hosts
+      }
+      // AllOrigins succeeds for Google News business feeds (ATOM) and CNBC.
+      return { ok: true, text: async () => ATOM_FIXTURE };
+    });
 
     const first = await fetchNews('all');
-    expect(fetch).toHaveBeenCalledTimes(NEWS_SOURCES.length);
+    // Every source = 1 rss2json attempt + at least 1 relay attempt.
+    expect(fetch.mock.calls.length).toBeGreaterThanOrEqual(NEWS_SOURCES.length * 2);
     const items = itemsOf(first);
     expect(items.length).toBeGreaterThan(0);
     expect(first.errors).toEqual({});
@@ -136,18 +244,39 @@ describe('fetchNews', () => {
   });
 
   it('isolates failures: broken sources are named, healthy ones still populate', async () => {
-    fetch
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }) // et-markets ok
-      .mockResolvedValueOnce({ ok: false, status: 502 }) // gn-india: relay down for that URL
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }) // cnbc ok
-      .mockResolvedValueOnce({ ok: true, text: async () => BROKEN_FIXTURE }) // gn-us: junk
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }) // coindesk ok
-      .mockResolvedValueOnce({ ok: true, text: async () => RSS_FIXTURE }); // gn-crypto ok
+    // Mocks follow URLs, not call order — a source is broken only when
+    // every path fails, exactly like the production fallback chain.
+    fetch.mockImplementation(async (url) => {
+      const rss2json = url.startsWith('https://api.rss2json.com/');
+      if (rss2json) return { ok: true, text: async () => '', json: async () => ({ status: 'error' }) };
+
+      const allorigins = url.includes('api.allorigins.win');
+      const codetabs = url.includes('api.codetabs.com');
+      const fixture = { ok: true, text: async () => RSS_FIXTURE };
+
+      // Relay URLs percent-encode nearly everythingfunctional. Match on
+      // fragments that survive encoding: locale codes are literal, and the
+      // /headlines/ path segment becomes '%2Fheadlines%2F'.
+      // gn-india topic feed: the relay is down for that URL on every path.
+      if (url.includes('en-IN')) return { ok: false, status: 502 };
+      // gn-us topic feed ('%2Fheadlines%2F' excludes the crypto-search
+      // feed, which also carries hl=en-US): relay answers with junk no
+      // parser accepts.
+      if (url.includes('%2Fheadlines%2F')) {
+        return allorigins || codetabs ? { ok: true, text: async () => BROKEN_FIXTURE } : { ok: false };
+      }
+      if (codetabs) return { ok: false }; // codetabs offline for healthy feeds
+      if (allorigins) return fixture;
+      return { ok: false };
+    });
 
     const result = await fetchNews('all');
     expect(result.items.length).toBeGreaterThan(0);
-    expect(result.errors['Google News · India business']).toBe('relay unreachable');
-    expect(result.errors['Google News · US business']).toBe('unparseable feed');
+    // Every failed source names itself with the honest all-paths-exhausted
+    // message — a relay hiccup and an unparseable payload both surface as
+    // "this feed could not be reached", never as fake success.
+    expect(result.errors['Google News · India business']).toBe('unreachable (all relays)');
+    expect(result.errors['Google News · US business']).toBe('unreachable (all relays)');
     expect(Object.keys(result.errors)).toHaveLength(2);
   });
 

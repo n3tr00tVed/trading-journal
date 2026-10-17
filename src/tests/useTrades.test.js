@@ -137,7 +137,7 @@ describe('updateTrade', () => {
     expect(storedTrades()[0]).toEqual(before);
   });
 
-  it('locks closed trades: P&L fields cannot be edited after closing', () => {
+  it('guards closed trades: P&L fields cannot be edited accidentally', () => {
     const result = hookWithClosedTrade();
     const before = { ...result.current.trades[0] };
 
@@ -147,11 +147,31 @@ describe('updateTrade', () => {
     });
     expect(verdict.ok).toBe(false);
     expect(verdict.locked).toBe(true);
-    expect(verdict.errors.form).toMatch(/locked/i);
+    expect(verdict.errors.form).toMatch(/closed/i);
 
-    // Storage untouched too — the lock is a data-layer guarantee.
+    // Storage untouched too — the guard is a data-layer guarantee.
     expect(result.current.trades[0]).toEqual(before);
     expect(storedTrades()[0]).toEqual(before);
+  });
+
+  it('allows closed-trade edits when the caller explicitly unlocks (post-confirm)', () => {
+    const result = hookWithClosedTrade();
+
+    let verdict;
+    act(() => {
+      verdict = result.current.updateTrade(
+        CLOSED.id,
+        { exitPrice: 120, fees: 2, notes: 'fixed the typo' },
+        { allowClosed: true },
+      );
+    });
+    expect(verdict.ok).toBe(true);
+    const updated = result.current.trades.find((t) => t.id === CLOSED.id);
+    expect(updated.exitPrice).toBe(120);
+    expect(updated.fees).toBe(2);
+    expect(updated.notes).toBe('fixed the typo');
+    // Persisted too.
+    expect(storedTrades().find((t) => t.id === CLOSED.id).exitPrice).toBe(120);
   });
 
   it('still allows the internal screenshot flag on closed trades', () => {

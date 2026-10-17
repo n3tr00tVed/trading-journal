@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   computeCurrencyBreakdown,
   computeStats,
+  distanceToStopLoss,
+  distanceToTakeProfit,
   filterTrades,
   sortTrades,
+  stopLossHit,
+  takeProfitHit,
   tradeGrossPnl,
   tradeInvested,
   tradeNetPnl,
@@ -314,6 +318,82 @@ describe('validateTrade / createTrade', () => {
       fees: 4,
     }));
     expect(v.ok).toBe(true);
+  });
+});
+
+describe('take profit / stop loss fields', () => {
+  it('normalize: valid levels kept, junk coerced to null', () => {
+    const kept = normalizeTrade({
+      symbol: 'BTCUSDT',
+      market: 'crypto',
+      direction: 'long',
+      entryPrice: 50000,
+      quantity: 0.1,
+      entryDate: '2026-01-05',
+      takeProfit: 55000,
+      stopLoss: 47000,
+    });
+    expect(kept.takeProfit).toBe(55000);
+    expect(kept.stopLoss).toBe(47000);
+
+    const coerced = normalizeTrade({
+      symbol: 'BTCUSDT',
+      entryPrice: 50000,
+      quantity: 0.1,
+      entryDate: '2026-01-05',
+      takeProfit: 'not-a-number',
+      stopLoss: -3, // negative is junk → null
+    });
+    expect(coerced.takeProfit).toBeNull();
+    expect(coerced.stopLoss).toBeNull();
+
+    const defaults = normalizeTrade({ symbol: 'X', entryPrice: 1, quantity: 1, entryDate: '2026-01-05' });
+    expect(defaults.takeProfit).toBeNull();
+    expect(defaults.stopLoss).toBeNull();
+  });
+
+  it('validate: zero/negative levels are rejected, positive pass', () => {
+    const bad = validateTrade({
+      symbol: 'X',
+      entryPrice: 100,
+      quantity: 1,
+      entryDate: '2026-01-05',
+      takeProfit: 0,
+      stopLoss: -5,
+    });
+    expect(bad.ok).toBe(false);
+    expect(bad.errors.takeProfit).toBeTruthy();
+    expect(bad.errors.stopLoss).toBeTruthy();
+
+    const good = validateTrade({
+      symbol: 'X',
+      entryPrice: 100,
+      quantity: 1,
+      entryDate: '2026-01-05',
+      takeProfit: 110,
+      stopLoss: 95,
+    });
+    expect(good.ok).toBe(true);
+  });
+
+  it('distance helpers measure from last price, hit-checks respect direction', () => {
+    const long = { direction: 'long', entryPrice: 100, takeProfit: 110, stopLoss: 90 };
+    expect(distanceToTakeProfit(long, 100)).toBeCloseTo(10);   // needs +10%
+    expect(distanceToStopLoss(long, 100)).toBeCloseTo(-10);    // level below price
+    expect(takeProfitHit(long, 110)).toBe(true);               // touched TP
+    expect(takeProfitHit(long, 109.99)).toBe(false);
+    expect(stopLossHit(long, 90)).toBe(true);
+    expect(stopLossHit(long, 90.01)).toBe(false);
+
+    const short = { direction: 'short', entryPrice: 100, takeProfit: 90, stopLoss: 110 };
+    expect(takeProfitHit(short, 90)).toBe(true);               // short TP hit when price falls
+    expect(stopLossHit(short, 110)).toBe(true);                // short SL hit when price rises
+  });
+
+  it('distance helpers return null without a level or usable price', () => {
+    expect(distanceToTakeProfit({ direction: 'long', entryPrice: 100, takeProfit: null }, 100)).toBeNull();
+    expect(distanceToTakeProfit({ direction: 'long', entryPrice: 100, takeProfit: 110 }, null)).toBeNull();
+    expect(stopLossHit({ direction: 'long', entryPrice: 100, stopLoss: null }, 100)).toBe(false);
   });
 });
 

@@ -4,7 +4,7 @@
  * Canonical field list (see CONTRACTS.md):
  *   id, symbol, market, currency, direction, entryPrice, exitPrice,
  *   quantity, invested, entryDate, exitDate, fees, strategy, setup, notes,
- *   hasScreenshot, createdAt
+ *   hasScreenshot, createdAt, takeProfit, stopLoss
  *
  * `country` money is always the trade's own: a trade recorded in the US
  * market is tagged 'USD' and formatted in dollars, an Indian market trade
@@ -16,6 +16,11 @@
  * `leverage` (optional, e.g. 5 = 5× margin) scales the auto-derived invested
  * amount: invested = entryPrice × quantity ÷ leverage when `invested` is
  * unset. Trade-level money fields use the trade's own `currency` tag.
+ *
+ * `takeProfit` and `stopLoss` are optional price targets for the trade.
+ * When set, they represent the price at which the trade would be closed
+ * for profit (take profit) or loss (stop loss). These are informational
+ * only and do not affect P&L calculations unless explicitly used.
  */
 
 export const MARKETS = ['stocks', 'futures', 'forex', 'crypto', 'options'];
@@ -68,6 +73,8 @@ export function normalizeTrade(raw) {
   const fees = toNumberOrNull(raw.fees);
   const invested = toNumberOrNull(raw.invested);
   const leverage = toNumberOrNull(raw.leverage);
+  const takeProfit = toNumberOrNull(raw.takeProfit);
+  const stopLoss = toNumberOrNull(raw.stopLoss);
 
   if (!symbol || entryPrice === null || quantity === null) return null;
 
@@ -82,6 +89,8 @@ export function normalizeTrade(raw) {
     quantity,
     invested: invested !== null ? invested : null,
     leverage: leverage !== null ? leverage : null,
+    takeProfit: takeProfit !== null && takeProfit > 0 ? takeProfit : null,
+    stopLoss: stopLoss !== null && stopLoss > 0 ? stopLoss : null,
     entryDate: isValidDateString(raw.entryDate) ? raw.entryDate : null,
     exitDate: isValidDateString(raw.exitDate) ? raw.exitDate : null,
     fees: fees === null || fees < 0 ? 0 : fees,
@@ -154,6 +163,18 @@ export function validateTrade(trade) {
   if (trade.leverage !== null && trade.leverage !== undefined) {
     if (!Number.isFinite(trade.leverage) || trade.leverage < 1) {
       errors.leverage = 'Leverage must be 1 or higher (e.g. 5 for 5× margin).';
+    }
+  }
+
+  if (trade.takeProfit !== null && trade.takeProfit !== undefined) {
+    if (!Number.isFinite(trade.takeProfit) || trade.takeProfit <= 0) {
+      errors.takeProfit = 'Take profit must be a positive number.';
+    }
+  }
+
+  if (trade.stopLoss !== null && trade.stopLoss !== undefined) {
+    if (!Number.isFinite(trade.stopLoss) || trade.stopLoss <= 0) {
+      errors.stopLoss = 'Stop loss must be a positive number.';
     }
   }
 

@@ -29,7 +29,7 @@ import {
   formatRatio,
   signedFormatCurrency,
 } from '../lib/format.js';
-import { unrealizedPnl, unrealizedReturnOnInvested } from '../lib/calculations.js';
+import { unrealizedPnl, unrealizedReturnOnInvested, distanceToTakeProfit, distanceToStopLoss, takeProfitHit, stopLossHit } from '../lib/calculations.js';
 import { useCurrency } from '../hooks/useCurrency.js';
 import StatCard from './StatCard.jsx';
 import EmptyState from './EmptyState.jsx';
@@ -307,11 +307,11 @@ export default function Dashboard({
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
-                          disabled
-                          aria-label={`Edit ${trade.symbol} trade (locked: trade is closed)`}
-                          title="Closed trades are locked from editing. Delete and re-enter to correct history."
+                          onClick={() => onEditTrade(trade)}
+                          aria-label={`Edit ${trade.symbol} trade entered ${formatDate(trade.entryDate)} (closed — you'll be asked to confirm)`}
+                          title="Closed trade — editing rewrites recorded history, so you'll be asked to confirm first."
                         >
-                          Edit 🔒
+                          Edit
                         </button>
                       )}
                       <button
@@ -355,6 +355,7 @@ export default function Dashboard({
                 <th scope="col" className="num">Last price</th>
                 <th scope="col" className="num">Invested</th>
                 <th scope="col" className="num">Unrealized P&amp;L</th>
+                <th scope="col" className="num">TP / SL</th>
                 <th scope="col">Entry date</th>
               </tr>
             </thead>
@@ -365,6 +366,10 @@ export default function Dashboard({
                 const pennies = unrealizedPnl(trade, lastPrice);
                 const roiOnMargin = unrealizedReturnOnInvested(trade, lastPrice);
                 const isCrypto = trade.market === 'crypto';
+                const tpDist = distanceToTakeProfit(trade, lastPrice);
+                const slDist = distanceToStopLoss(trade, lastPrice);
+                const tpHit = takeProfitHit(trade, lastPrice);
+                const slHit = stopLossHit(trade, lastPrice);
                 return (
                   <tr key={trade.id}>
                     <td className="mono">{trade.symbol}</td>
@@ -400,6 +405,26 @@ export default function Dashboard({
                             </span>
                           )}
                         </>
+                      )}
+                    </td>
+                    <td className="mono num">
+                      {trade.takeProfit == null && trade.stopLoss == null ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <span className="tpsl-cell">
+                          {trade.takeProfit != null && (
+                            <span className={tpHit ? 'pnl-pos' : 'pnl-flat'} title={tpHit ? 'Take profit reached' : 'Take profit not yet reached'}>
+                              🎯 {formatCurrency(trade.takeProfit, trade.currency)}
+                              {tpDist != null ? ` (${tpDist > 0 ? '+' : ''}${tpDist}%)` : ''}
+                            </span>
+                          )}
+                          {trade.stopLoss != null && (
+                            <span className={slHit ? 'pnl-neg' : 'pnl-flat'} title={slHit ? 'Stop loss breached' : 'Stop loss not yet reached'}>
+                              🛑 {formatCurrency(trade.stopLoss, trade.currency)}
+                              {slDist != null ? ` (${slDist > 0 ? '+' : ''}${slDist}%)` : ''}
+                            </span>
+                          )}
+                        </span>
                       )}
                     </td>
                     <td>{formatDate(trade.entryDate)}</td>

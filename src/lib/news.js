@@ -75,6 +75,20 @@ export const NEWS_SOURCES = [
 /** Hard ceiling per feed request: a slow relay must never pin the UI. */
 const FETCH_TIMEOUT_MS = 15_000;
 
+/**
+ * Fetch paths, tried in order per source until one yields items:
+ * 1. rss2json — CORS-native feed→JSON service, so the browser calls it
+ *    directly. Proven the most reliable path (public XML relays currently
+ *    5xx on Google News/CNBC/CoinDesk).
+ * 2. Raw XML through public CORS relays (AllOrigins, then CodeTabs).
+ * A source fails only when EVERY path fails, and the error names it.
+ */
+const RSS2JSON_ENDPOINT = 'https://api.rss2json.com/v1/api.json?rss_url=';
+const XML_RELAYS = [
+  { id: 'allorigins', url: (feedUrl) => `${RELAY}${encodeURIComponent(feedUrl)}` },
+  { id: 'codetabs', url: (feedUrl) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}` },
+];
+
 async function fetchWithTimeout(url) {
   // AbortSignal.timeout exists in all modern browsers; fall back to a
   // manual controller for older engines / tests.
@@ -125,6 +139,7 @@ export function parseFeedXml(text, { sourceLabel = '', region = '' } = {}) {
       region,
       publishedAt: parsedDate ? parsedDate.toISOString() : null,
       summary: stripTags(summary).slice(0, 220),
+      sentiment: classifySentiment(title + ' ' + summary),
     });
   });
 
@@ -146,6 +161,7 @@ export function parseFeedXml(text, { sourceLabel = '', region = '' } = {}) {
       region,
       publishedAt: parsedDate ? parsedDate.toISOString() : null,
       summary: stripTags(summary).slice(0, 220),
+      sentiment: classifySentiment(title + ' ' + summary),
     });
   });
 
@@ -157,6 +173,85 @@ export function publishedDate(raw) {
   if (!raw) return null;
   const date = new Date(raw);
   return Number.isFinite(date.getTime()) ? date : null;
+}
+
+/**
+ * Keyword-based sentiment for headline text. Returns 'bullish', 'bearish'
+ * or 'neutral'. Keywords match on word boundaries so 'up' doesn't fire on
+ * 'update' — noise in a single headline is cosmetic, but noise in the
+ * per-region aggregate would misstate the overall verdict.
+ */
+const SENTIMENT_KEYWORDS = {
+  bullish: ['rise', 'rises', 'surge', 'surges', 'rally', 'rallies', 'gain', 'gains', 'jump', 'jumps', 'climb', 'climbs', 'growth', 'positive', 'strong', 'record', 'high', 'profit', 'profits', 'beat', 'beats', 'soar', 'soars', 'upgrade', 'outperform', 'bullish', 'uptick', 'recovery', 'rebound', 'boost'],
+  bearish: ['fall', 'falls', 'drop', 'drops', 'decline', 'declines', 'plunge', 'plunges', 'slump', 'slumps', 'loss', 'losses', 'negative', 'weak', 'low', 'crash', 'crashes', 'slide', 'slides', 'downgrade', 'miss', 'misses', 'sink', 'sinks', 'bearish', 'downturn', 'downtick', 'recession', 'cut', 'cuts'],
+};
+
+const SENTIMENT_MATCHERS = Object.fromEntries(
+  Object.entries(SENTIMENT_KEYWORDS).map(([tone, words]) => [
+    tone,
+    new RegExp(`\\b(?:${words.join('|')})\\b`, 'i'),
+  ]),
+);
+
+export function classifySentiment(text) {
+  if (typeof text !== 'string') return 'neutral';
+  const bullish = SENTIMENT_MATCHERS.bullish.test(text);
+  const bearish = SENTIMENT_MATCHERS.bearish.test(text);
+  if (bullish && !bearish) return 'bullish';
+  if (bearish && !bullish) return 'bearish';
+  if (bullish && bearish) return 'neutral'; // mixed signals cancel out
+  return 'neutral';
+}
+
+/**
+ * Aggregate headline sentiment per region the news page covers.
+ * Returns { all, IN, US, CRYPTO } where each is
+ *   { total, bullish, bearish, neutral, tone, label }
+ *
+ * tone is the aggregate verdict: the side with more classified headlines
+ * wins, and a tie (or an all-neutral feed) is neutral. With fewer than
+ * MIN_SENTIMENT_SAMPLE classified headlines the verdict is withheld as
+ * 'mixed' — two headlines are gossip, not a trend — so the label stays
+ * honest about what the data supports.
+ */
+export const MIN_SENTIMENT_SAMPLE = 3;
+
+export function overallSentiment(items = []) {
+  const list = Array.isArray(items) ? items : [];
+  const blank = () => ({ total: 0, bullish: 0, bearish: 0, neutral: 0 });
+  const tally = { all: blank(), IN: blank(), US: blank(), CRYPTO: blank() };
+
+  for (const item of list) {
+    const sentiment =
+      item?.sentiment === 'bullish' ? 'bullish' : item?.sentiment === 'bearish' ? 'bearish' : 'neutral';
+    const add = (bucket) => {
+      if (!bucket) return;
+      bucket.total += 1;
+      if (sentiment === 'bullish') bucket.bullish += 1;
+      else if (sentiment === 'bearish') bucket.bearish += 1;
+      else bucket.neutral += 1;
+    };
+    add(tally[item?.region]);
+    add(tally.all);
+  }
+
+  const verdict = (counts) => {
+    const classified = counts.bullish + counts.bearish;
+    if (classified >= MIN_SENTIMENT_SAMPLE && counts.bullish > counts.bearish) {
+      return { tone: 'bullish', label: 'Likely bullish' };
+    }
+    if (classified >= MIN_SENTIMENT_SAMPLE && counts.bearish > counts.bullish) {
+      return { tone: 'bearish', label: 'Likely bearish' };
+    }
+    if (classified > 0) {
+      return { tone: 'mixed', label: 'Mixed signals' };
+    }
+    return { tone: 'neutral', label: 'No clear signals' };
+  };
+
+  return Object.fromEntries(
+    Object.entries(tally).map(([key, counts]) => [key, { ...counts, ...verdict(counts) }]),
+  );
 }
 
 function stripTags(text) {
@@ -200,10 +295,68 @@ export function clearNewsCache() {
   }
 }
 
+/** rss2json response → normalized items. Never throws for bad shapes. */
+function itemsFromRss2Json(data, source) {
+  if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return [];
+  const items = [];
+  const seen = new Set();
+  for (const raw of data.items) {
+    const title = (raw.title ?? '').trim();
+    const link = (raw.link ?? '').trim();
+    if (!title || !link || seen.has(link)) continue;
+    seen.add(link);
+    const parsedDate = publishedDate((raw.pubDate ?? '').trim());
+    items.push({
+      title,
+      link,
+      source: source.label,
+      region: source.region,
+      publishedAt: parsedDate ? parsedDate.toISOString() : null,
+      summary: stripTags(raw.description ?? '').slice(0, 220),
+    });
+  }
+  return items;
+}
+
+/**
+ * One source = several fetch attempts. First path that yields ≥1 item
+ * wins; exhausting all of them throws the honest error.
+ */
+async function fetchSourceItems(source) {
+  if (typeof fetch !== 'function') throw new Error('unreachable (all relays)');
+
+  // 1) rss2json (CORS-native; no relay in between).
+  try {
+    const response = await fetchWithTimeout(`${RSS2JSON_ENDPOINT}${encodeURIComponent(source.url)}`);
+    if (response.ok) {
+      const data = await response.json();
+      const items = itemsFromRss2Json(data, source);
+      if (items.length > 0) return items;
+    }
+  } catch {
+    // Non-JSON error page, rate limit, timeout → try the XML relays.
+  }
+
+  // 2) Raw XML through the public relays, in order.
+  for (const relay of XML_RELAYS) {
+    try {
+      const response = await fetchWithTimeout(relay.url(source.url));
+      if (!response.ok) continue;
+      const text = await response.text();
+      const items = parseFeedXml(text, { sourceLabel: source.label, region: source.region });
+      if (items.length > 0) return items;
+    } catch {
+      // next relay
+    }
+  }
+
+  throw new Error('unreachable (all relays)');
+}
+
 /**
  * Fetch + parse the feeds for a region. Returns
  * `{ items, fetchedAt, errors }` where errors maps source label → honest
- * message ('relay unreachable', 'unparseable feed', 'empty feed').
+ * message ('unreachable (all relays)', 'unparseable feed').
  */
 export async function fetchNews(region = 'all', { force = false } = {}) {
   if (!force) {
@@ -216,17 +369,7 @@ export async function fetchNews(region = 'all', { force = false } = {}) {
     return { items: [], fetchedAt: Date.now(), errors: {}, fromCache: false };
   }
 
-  const results = await Promise.allSettled(
-    sources.map(async (source) => {
-      if (typeof fetch !== 'function') throw new Error('relay unreachable');
-      const response = await fetchWithTimeout(`${RELAY}${encodeURIComponent(source.url)}`);
-      if (!response.ok) throw new Error('relay unreachable');
-      const text = await response.text();
-      const items = parseFeedXml(text, { sourceLabel: source.label, region: source.region });
-      if (items.length === 0) throw new Error('unparseable feed');
-      return items;
-    }),
-  );
+  const results = await Promise.allSettled(sources.map((source) => fetchSourceItems(source)));
 
   const items = [];
   const errors = {};

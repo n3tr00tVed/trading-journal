@@ -89,6 +89,55 @@ export function unrealizedReturnOnInvested(trade, lastPrice) {
   return round2((pnl / invested) * 100);
 }
 
+/**
+ * Percent move still needed from `lastPrice` to reach the take-profit
+ * level, signed by profitability of hitting it (positive = target still
+ * ahead in the winning direction). null when there is no usable price or
+ * the trade has no take-profit set.
+ */
+export function distanceToTakeProfit(trade, lastPrice) {
+  return distanceToLevel(trade, lastPrice, 'takeProfit');
+}
+
+/** Same as distanceToTakeProfit but for the stop-loss level. */
+export function distanceToStopLoss(trade, lastPrice) {
+  return distanceToLevel(trade, lastPrice, 'stopLoss');
+}
+
+function distanceToLevel(trade, lastPrice, field) {
+  if (!trade || !isFiniteNumber(lastPrice) || lastPrice <= 0) return null;
+  const level = trade[field];
+  if (!isFiniteNumber(level) || level <= 0) return null;
+  const entry = trade.entryPrice;
+  if (!isFiniteNumber(entry) || entry <= 0) return null;
+  // % distance from the current price to the level (positive = level is above).
+  return round2(((level - lastPrice) / lastPrice) * 100);
+}
+
+/**
+ * Has the live price already touched the take-profit level? For a long
+ * trade TP is above; for a short trade TP is below.
+ */
+export function takeProfitHit(trade, lastPrice) {
+  return levelHit(trade, lastPrice, 'takeProfit');
+}
+
+/** Has the live price already touched the stop-loss level? */
+export function stopLossHit(trade, lastPrice) {
+  return levelHit(trade, lastPrice, 'stopLoss');
+}
+
+function levelHit(trade, lastPrice, field) {
+  if (!trade || !isFiniteNumber(lastPrice) || lastPrice <= 0) return false;
+  const level = trade[field];
+  if (!isFiniteNumber(level) || level <= 0) return false;
+  // Take-profit sits on the winning side (above entry for a long, below
+  // for a short); stop-loss sits on the losing side. The price has hit a
+  // level when it has reached it from the entry side.
+  const winningSide = (trade.direction === 'long') === (field === 'takeProfit');
+  return winningSide ? lastPrice >= level : lastPrice <= level;
+}
+
 function round2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }

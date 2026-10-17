@@ -15,11 +15,11 @@ import { computeStats } from '../lib/calculations.js';
  * importTrades returns { added, skipped, errors, ok } — duplicate ids are
  * skipped (existing records are never silently overwritten).
  *
- * Locked history: a closed trade is immutable. updateTrade on one only
- * accepts the internal screenshot flag (attaching a shot to a trade that
- * got closed in the same save must keep working); every other field is
- * rejected with { ok: false, locked: true }. Correcting a closed trade
- * means deleting and re-entering it — recorded history stays honest.
+ * Guarded history: a closed trade is protected from *accidental* edits —
+ * updateTrade on one rejects everything except the internal screenshot
+ * flag ({ ok: false, locked: true }) unless the caller explicitly passes
+ * `allowClosed`, which the UI sets only after the user confirms the
+ * "editing rewrites recorded history" dialog.
  */
 const CLOSED_EDIT_ALLOWED_KEYS = new Set(['hasScreenshot']);
 
@@ -48,18 +48,19 @@ export function useTrades() {
   );
 
   const updateTrade = useCallback(
-    (id, changes) => {
+    (id, changes, { allowClosed = false } = {}) => {
       const index = list.findIndex((t) => t.id === id);
       if (index === -1) return { ok: false, errors: { form: 'Trade not found.' } };
 
-      // Closed trades are locked: only the screenshot flag survives.
-      if (!isTradeOpen(list[index])) {
+      // Closed trades are guarded: only the screenshot flag (or an explicit
+      // allowClosed after the user's confirmation) may change them.
+      if (!isTradeOpen(list[index]) && !allowClosed) {
         const forbidden = Object.keys(changes ?? {}).some((key) => !CLOSED_EDIT_ALLOWED_KEYS.has(key));
         if (forbidden) {
           return {
             ok: false,
             locked: true,
-            errors: { form: 'Closed trades are locked. Delete and re-enter the trade to correct its history.' },
+            errors: { form: 'This trade is closed. Confirm the edit dialog to change recorded history.' },
           };
         }
       }

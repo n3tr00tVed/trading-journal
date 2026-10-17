@@ -13,6 +13,8 @@ const CLOSED = {
   invested: 200,
   currency: 'INR',
   leverage: null,
+  takeProfit: null,
+  stopLoss: null,
   entryDate: '2026-01-02',
   exitDate: '2026-01-03',
   fees: 1,

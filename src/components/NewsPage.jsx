@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchNews, NEWS_REGION_LABELS, NEWS_REGIONS, NEWS_SOURCES } from '../lib/news.js';
+import { fetchNews, NEWS_REGION_LABELS, NEWS_REGIONS, NEWS_SOURCES, overallSentiment } from '../lib/news.js';
 import EmptyState from './EmptyState.jsx';
 import '../styles/app.css';
 
@@ -33,6 +33,15 @@ function timeAgo(iso, now = Date.now()) {
 }
 
 function NewsCard({ item }) {
+  const sentimentBadge = item?.sentiment && item.sentiment !== 'neutral' ? (
+    <span
+      className={`badge ${item.sentiment === 'bullish' ? 'badge-bullish' : 'badge-bearish'}`}
+      title={`Headline reads ${item.sentiment} (keyword analysis, informational only)`}
+    >
+      {item.sentiment === 'bullish' ? '↑ Bullish' : '↓ Bearish'}
+    </span>
+  ) : null;
+
   return (
     <article className="news-card card">
       <header className="news-meta">
@@ -43,6 +52,7 @@ function NewsCard({ item }) {
         <time className="news-time" dateTime={item.publishedAt ?? undefined}>
           {timeAgo(item.publishedAt)}
         </time>
+        {sentimentBadge}
       </header>
       <a className="news-title" href={item.link} target="_blank" rel="noopener noreferrer">
         {item.title}
@@ -81,6 +91,42 @@ function NewsSkeleton() {
           <span className="skeleton-line" />
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Overall sentiment strip: one verdict card per market (India, US, crypto,
+ * plus the combined view). The verdict is a keyword tally over the fetched
+ * headlines — informational mood-reading, never a trading signal — and the
+ * bullish/bearish counts are always shown so the basis is visible.
+ */
+function SentimentSummary({ summary }) {
+  // Reading order: combined first, then the markets in the same order as
+  // the region tabs (India → US → crypto).
+  const order = ['all', 'IN', 'US', 'CRYPTO'];
+  const toneClass = { bullish: 'badge-bullish', bearish: 'badge-bearish', mixed: 'badge-neutral', neutral: 'badge-neutral' };
+  const toneDot = { bullish: 'pnl-pos', bearish: 'pnl-neg', mixed: 'pnl-flat', neutral: 'pnl-flat' };
+
+  return (
+    <div className="news-sentiment" aria-label="Overall market sentiment from the latest headlines">
+      {order.map((key) => {
+        const s = summary[key];
+        if (!s) return null;
+        return (
+          <div className={`news-sentiment-card card sentiment-${s.tone}`} key={key}>
+            <span className="news-sentiment-market">
+              {key === 'all' ? '🌐 All markets' : NEWS_REGION_LABELS[key]}
+            </span>
+            <span className={`badge ${toneClass[s.tone]}`} role="status">
+              {s.label}
+            </span>
+            <span className={`news-sentiment-counts mono ${toneDot[s.tone]}`}>
+              ↑ {s.bullish} · ↓ {s.bearish} · {s.neutral} neutral
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -135,6 +181,9 @@ export default function NewsPage() {
     [items, region],
   );
 
+  // Aggregate mood per market over everything currently fetched.
+  const sentimentSummary = useMemo(() => overallSentiment(items), [items]);
+
   const sourceCount = NEWS_SOURCES.length;
 
   return (
@@ -184,6 +233,7 @@ export default function NewsPage() {
 
       {status === 'ready' && (
         <>
+          <SentimentSummary summary={sentimentSummary} />
           {Object.keys(errors).length > 0 && <ErrorList errors={errors} onRetry={refresh} />}
           {shown.length === 0 ? (
             <EmptyState

@@ -68,6 +68,7 @@ function App() {
   // ---- dialogs ----
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(null);
+  const [confirmEditClosed, setConfirmEditClosed] = useState(null); // { trade } — history-edit guard
   const [screenshotView, setScreenshotView] = useState(null); // { trade, url }
 
   // Reconnect a previously granted folder on mount. Async callback state
@@ -169,22 +170,26 @@ function App() {
   }, [trades, capitals, syncAuto, dataDir, syncNow]);
 
   const openNewTrade = useCallback(() => setForm({ mode: 'new' }), []);
-  const openEditTrade = useCallback(
-    (trade) => {
-      // Recorded history lock: closed trades are enforced as immutable at
-      // the data layer too, but some flows may still hold a stale trade
-      // object, so the form entry point refuses them explicitly.
-      if (trade && !isTradeOpen(trade)) {
-        setToast({
-          message: 'Closed trades are locked from editing. Delete and re-enter the trade to correct its history.',
-          tone: 'neg',
-        });
-        return;
-      }
-      setForm({ mode: 'edit', trade });
-    },
-    [],
-  );
+
+  /**
+   * Editing a closed trade rewrites recorded history, so it requires one
+   * deliberate confirmation first. The form is only opened with
+   * `unlocked: true` after that confirm, and the save path passes
+   * `allowClosed` on that basis.
+   */
+  const openEditTrade = useCallback((trade) => {
+    if (trade && !isTradeOpen(trade)) {
+      setConfirmEditClosed({ trade });
+      return;
+    }
+    setForm({ mode: 'edit', trade });
+  }, []);
+
+  const confirmEditClosedTrade = useCallback(() => {
+    if (!confirmEditClosed) return;
+    setForm({ mode: 'edit', trade: confirmEditClosed.trade, unlocked: true });
+    setConfirmEditClosed(null);
+  }, [confirmEditClosed]);
   const closeForm = useCallback(() => setForm(null), []);
 
   /** Save the trade record, then mirror any screenshot change to IndexedDB. */
@@ -195,12 +200,15 @@ function App() {
       // log them (India → INR, US → USD). Edited trades keep their native
       // currency — unless you fixed the market field itself (e.g. entered
       // under the wrong market), in which case the trade is re-tagged to
-      // the market you're viewing while you fix it.
+      // the market you're viewing while you fix it. Closed trades may only
+      // be edited when the form was opened through the history-unlock
+      // confirm (form.unlocked).
       const marketChanged = isEdit && form.trade.market !== values.market;
+      const editOpts = { allowClosed: isEdit && form.unlocked === true };
       const base = marketChanged
-        ? updateTrade(form.trade.id, { ...values, currency })
+        ? updateTrade(form.trade.id, { ...values, currency }, editOpts)
         : isEdit
-          ? updateTrade(form.trade.id, values)
+          ? updateTrade(form.trade.id, values, editOpts)
           : addTrade({ ...values, currency });
       if (!base?.ok) return base;
 
@@ -473,6 +481,16 @@ function App() {
             danger
             onCancel={() => setConfirmRestore(null)}
             onConfirm={() => doRestore(confirmRestore)}
+          />
+        ) : null}
+
+        {confirmEditClosed ? (
+          <ConfirmDialog
+            title="Edit closed trade?"
+            body={`Editing rewrites the recorded history of ${confirmEditClosed.trade.symbol} — P&L, dates and notes included. Your journal stays honest only if edits are deliberate.`}
+            confirmLabel="Unlock and edit"
+            onCancel={() => setConfirmEditClosed(null)}
+            onConfirm={confirmEditClosedTrade}
           />
         ) : null}
 

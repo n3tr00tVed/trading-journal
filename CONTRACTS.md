@@ -20,6 +20,8 @@ authoritative conventions doc.)
   entryDate: string,   // ISO "YYYY-MM-DD" (required)
   exitDate: string|null,  // ISO "YYYY-MM-DD"; required when closed
   invested: number|null,  // money committed; null = derive as entryPrice × quantity ÷ leverage
+  takeProfit: number|null, // planned profit-exit price; optional, validated > 0
+  stopLoss: number|null,   // planned max-loss price; optional, validated > 0
   currency: 'INR'|'USD',  // native tag of the trade's market (legacy defaults to 'INR')
   fees: number,        // >= 0, default 0
 
@@ -41,6 +43,7 @@ authoritative conventions doc.)
 - `tradeNetPnl(trade)` — ` tradeGrossPnl(trade) - (trade.fees || 0)`, closed only.
 - `tradeInvested(trade)` — capital actually committed: explicit `invested` when set, else `(entryPrice × quantity) ÷ leverage` (leverage < 1 ignored = ÷1), else `0`. Open trades invest too.
 - `tradeReturnOnInvested(trade)` — net P&L as % of invested; `null` while open or invested ≤ 0.
+- **TP/SL levels** (`takeProfit`, `stopLoss`, both optional, > 0 when set): `distanceToTakeProfit(trade, lastPrice)` / `distanceToStopLoss` return the percent move from the live price to each level (null without a level or price); `takeProfitHit` / `stopLossHit` report whether a live price has reached the level (TP: reach on the winning side — long ≥ level, short ≤ level; SL: reach on the losing side — long ≤ level, short ≥ level). Levels are informational planning fields and never enter P&L aggregates.
 - `isTradeOpen(trade)`.
 - `computeStats(trades)` →
   `{ total, open, closed, wins, losses, breakeven, winRate, grossProfit, grossLoss, netPnl, totalFees, profitFactor, avgWin, avgLoss, expectancy, largestWin, largestLoss, investedClosed, investedOpen }`
@@ -66,7 +69,7 @@ const { trades, stats, addTrade, updateTrade, deleteTrade, restoreTrades, import
 
 - Backed by `src/lib/storage.js` (`loadTrades(): Trade[]` with per-record `normalizeTrade` + `validateTrade` filtering/quarantine of malformed records, `saveTrades(trades)` best-effort with quota/serialization-safe try/catch, `STORAGE_KEY = 'trading-journal:trades:v1'`).
 - Mutations validate and return `{ ok, errors }`; all state updates persist synchronously to localStorage; `stats` from `computeStats(trades)` via `useMemo`.
-- **Closed trades are immutable**: `updateTrade` on a closed record only accepts the internal `hasScreenshot` flag; any other field returns `{ ok: false, locked: true }` without touching storage. The edit affordance is removed for closed rows (disabled "Edit 🔒" with an explanation; `App.openEditTrade` also refuses defensively, since callers may hold a stale pre-closure trade snapshot). Deleting and re-entering is the sanctioned way to correct a closed trade, so recorded history can never be quietly rewritten.
+- **Closed trades are guarded, not silently editable**: `updateTrade` on a closed record rejects every field change except the internal `hasScreenshot` flag — returning `{ ok: false, locked: true }` without touching storage — unless the caller explicitly passes `{ allowClosed: true }`. That flag exists only for the UI path that first shows the **"Edit closed trade?"** confirmation ("Unlock and edit"); `App.openEditTrade` routes closed trades through this dialog and marks the form `unlocked`, and the save path passes `allowClosed` on that basis. Every closed row still shows "Edit 🔒" with a tooltip explaining that editing rewrites recorded history. So accidental edits are blocked twice (UI confirm + data-layer guard), while deliberate corrections are possible without the old delete-and-re-enter workaround.
 - `importTrades(raw)` validates array of raw objects, returns `{ ok, added, skipped, errors }`, merges by id (skip duplicates), persists.
 
 ## App shell (`src/App.jsx` — lead)

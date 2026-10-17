@@ -96,6 +96,7 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
               <th scope="col" className="num">Entry price</th>
               <th scope="col" className="num">Invested</th>
               <th scope="col" className="num">Exit price</th>
+              <th scope="col" className="num">TP / SL</th>
               <th scope="col" className="num">Net P&amp;L</th>
               <th scope="col">Strategy</th>
               <th scope="col">Entry date</th>
@@ -143,6 +144,25 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
                   <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
                   <td className="mono num">{formatCurrency(tradeInvested(trade), trade.currency)}</td>
                   <td className="mono num">{open ? '—' : formatCurrency(trade.exitPrice, trade.currency)}</td>
+                  <td className="mono num">
+                    {trade.takeProfit != null || trade.stopLoss != null ? (
+                      <span className="tpsl-cell">
+                        {trade.takeProfit != null ? (
+                          <span className="pnl-pos" title={`Take profit ${formatCurrency(trade.takeProfit, trade.currency)}`}>
+                            🎯 {formatCurrency(trade.takeProfit, trade.currency)}
+                          </span>
+                        ) : null}
+                        {trade.takeProfit != null && trade.stopLoss != null ? ' / ' : null}
+                        {trade.stopLoss != null ? (
+                          <span className="pnl-neg" title={`Stop loss ${formatCurrency(trade.stopLoss, trade.currency)}`}>
+                            🛑 {formatCurrency(trade.stopLoss, trade.currency)}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <NetPnlCell trade={trade} price={open && quote ? quote.price : null} />
                   <td>{trade.strategy || '—'}</td>
                   <td>{formatDate(trade.entryDate)}</td>
@@ -160,11 +180,11 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
-                        disabled
-                        aria-label={`Edit ${trade.symbol} trade (locked: trade is closed)`}
-                        title="Closed trades are locked from editing. Delete and re-enter to correct history."
+                        aria-label={`Edit ${trade.symbol} trade (closed — you'll be asked to confirm)`}
+                        title="Closed trade — editing rewrites recorded history, so you'll be asked to confirm first."
+                        onClick={() => onEdit?.(trade)}
                       >
-                        Edit 🔒
+                        Edit
                       </button>
                     )}
                     <button

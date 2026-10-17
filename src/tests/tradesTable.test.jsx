@@ -27,8 +27,8 @@ function trade(fields) {
 
 afterEach(cleanup);
 
-describe('TradesTable — closed trades are locked from editing', () => {
-  it('enables Edit for open trades and disables it for closed ones', async () => {
+describe('TradesTable — closed trades open the history-unlock confirm', () => {
+  it('enables Edit for open and closed rows alike (App confirms closed edits)', async () => {
     const onEdit = vi.fn();
     const user = userEvent.setup();
     render(
@@ -42,14 +42,22 @@ describe('TradesTable — closed trades are locked from editing', () => {
     );
 
     const openEdit = screen.getByRole('button', { name: 'Edit OPENTRD trade' });
-    const closedEdit = screen.getByRole('button', { name: 'Edit SHUTTRD trade (locked: trade is closed)' });
+    const closedEdit = screen.getByRole('button', {
+      name: 'Edit SHUTTRD trade (closed — you\'ll be asked to confirm)',
+    });
     expect(openEdit).toBeEnabled();
-    expect(closedEdit).toBeDisabled();
-    expect(closedEdit).toHaveAttribute('title', expect.stringMatching(/locked/i));
+    expect(closedEdit).toBeEnabled();
+    // The closed-row button warns before editing history…
+    expect(closedEdit).toHaveAttribute('title', expect.stringMatching(/confirm/i));
 
     await user.click(openEdit);
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onEdit.mock.calls[0][0].id).toBe('open-1');
+
+    // …and hands the closed trade to App, which shows the confirm dialog.
+    await user.click(closedEdit);
+    expect(onEdit).toHaveBeenCalledTimes(2);
+    expect(onEdit.mock.calls[1][0].id).toBe('shut-1');
   });
 
   it('delete stays available on closed trades (the sanctioned correction path)', async () => {
