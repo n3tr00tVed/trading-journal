@@ -27,3 +27,15 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Personal trading data — never commit your journal.
+# Your trades live in browser storage, and the optional disk-sync folder
+# (trades_data/) wherever you pointed it — usually ~/Documents. These
+# entries guard against accidentally copying those files into this repo
+# and pushing them to GitHub.
+trades_data/
+trades.json
+capital.json
+rules.txt
+trading-journal.csv
+trading-journal.json
