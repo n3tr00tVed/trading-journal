@@ -1,97 +1,136 @@
 # Trading Journal
 
-A local-first personal trading journal. Track your trades, compute realized
-P&L with fees included, and review your performance — all stored entirely on
-your own device. No accounts, no servers, nothing leaves your browser.
+A local-first personal trading journal. Track trades with take-profit / stop-loss
+plans, watch open crypto positions move in real time, keep a rules page, read
+market news with a per-market sentiment read — and know your stats. Everything
+is stored on your own device. No accounts, no servers, nothing leaves your
+browser unless you explicitly allow it.
 
 ## Features
 
-- **Dashboard** — net P&L, win rate, profit factor, average win/loss,
-  account capital with return-on-capital, open positions, and recent
-  trades at a glance.
-- **Trade management** — add, edit, and delete trades; filter by symbol,
-  direction, strategy, status, and date range; free-text search across
-  symbol/strategy/setup/notes.
-- **Accurate analytics** — realized P&L for long and short trades, fees
-  included in net results; open trades excluded from statistics but shown
-  separately. All figures derive from the underlying trade records.
-- **Persistence** — data is saved to your browser's localStorage
-  automatically; corrupt or malformed stored records are handled safely.
-- **Export / import** — one-click CSV and JSON export, plus JSON import
-  (merge or replace). Everything happens client-side.
+### Journaling
+- **Trades** — add / edit / delete with filters (symbol, direction, strategy,
+  market segment, status, date range) and full-text search across
+  symbol / strategy / setup / notes.
+- **Take profit 🎯 / stop loss 🛑** — optional price levels on every trade.
+  The form previews what each level is worth in money as you type
+  (direction-aware for long/short), the trades table shows the levels inline,
+  and open crypto positions show **live distance to target/stop** (e.g.
+  `+4.2%`) with a flag when the Binance price has reached a level.
+- **Money invested + leverage** — the invested amount auto-derives as
+  entry × qty ÷ leverage (set `5` for 5× margin, override by hand). Stats
+  report invested in closed trades, capital in open positions, and each
+  trade's return on invested capital.
+- **Per-market currencies** — every trade is tagged with the currency of its
+  market: US trades read **$**, Indian trades read **₹**, row by row.
+  Rupees and dollars are never summed; the dashboard leads with the market
+  you're viewing and surfaces the other ledger beside it.
+- **Guarded history** — closed trades show an **Edit** button that first asks
+  *"Edit closed trade? Unlock and edit"* — editing rewrites recorded history,
+  so it's deliberate, double-guarded (UI confirm + data-layer reject). Deleting
+  a trade (or all trades) always requires confirmation.
+- **Screenshots** — attach a chart image (PNG/JPEG/WEBP/GIF ≤ 5 MB) to any
+  trade. Stored in your browser's IndexedDB only; **excluded from exports**
+  and never synced to disk.
+- **Rules page** — a private, autosaved page for your own trading rules and
+  self-checks.
 
-- **Rules** — a private, autosaved page for your personal trading rules
-  (risk limits, setups you trade, what disqualifies a trade). It lives in
-  localStorage like the trades and never leaves the device.
-- **Account capital** — set your capital in Settings; the dashboard shows
-  it alongside net P&L and your return on capital (`netPnl / capital`).
-- **Position size calculator (Indian market)** — enter your capital
-  (₹25,000 prefill from Settings), risk %, entry and stop prices, and the
-  calculator answers how many shares — or whole F&O lots — you can buy,
-  capping by both risk and affordability. Lot sizes auto-fill for NSE/BSE
-  index and MCX contracts (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
-- **Money invested** — every trade tracks how much capital it commits:
-  the form pre-fills it as entry × quantity ÷ **leverage** (set a leverage
-  like 5× for margin trades, or override the invested amount by hand), and
-  the journal reports total invested in closed trades, capital sitting in
-  open positions, and each closed trade's return on invested capital.
-- **Market currencies** — trades are tagged with the currency of the market
-  they were logged in: US trades profit in **dollars ($)**, Indian trades
-  profit in **rupees (₹)**, row by row. Rupees and dollars are never
-  summed; the dashboard leads with the market you're viewing and surfaces
-  the other market's total alongside it.
-- **Live P&L for open crypto positions** — an optional 10-second quote
-  pull from Binance's free public API keeps open crypto trades showing
-  unrealized P&L (+ % on margin) as the price moves, with an honest
-  status line ("Live every 10s · as of …" / paused / connection errors
-  spelled out). Quotes are held in memory only and never stored or
-  synced; toggle it off in Settings anytime (it's the app's only network
-  activity, and stock/futures/forex positions stay manual).
-- **Guarded history** — closed trades show "Edit 🔒": clicking it asks
-  **"Edit closed trade?"** first ("Unlock and edit"), because editing
-  rewrites recorded history (P&L, dates, notes). Only after that
-  deliberate confirm does the form open, and only that path can change a
-  closed record — the data layer rejects accidental edits. Deletion
-  keeps its own confirm guard.
-- **Currency** — defaults to ₹ INR with Indian digit grouping everywhere;
-  switch between **India (₹ INR)** and **US ($ USD)** markets from the
-  sidebar dropdown (any view) or in Settings.
-- **Trade filters** — filter your journal by market segment (stocks,
-  futures, forex, crypto, options) alongside direction, strategy, status,
-  symbol, and date range.
+### Analytics
+- **Dashboard** — net P&L (per market), win rate, profit factor, average
+  win/loss, expectancy, total invested, open positions with unrealized P&L,
+  and recent trades.
+- **Honest math** — win/loss classification uses **net** P&L (fees included);
+  open trades contribute zero to realized stats and are shown separately.
+  All figures derive from the records — no stored status flags to drift.
+- **Position size calculator** — capital + risk % + entry/stop → shares or
+  whole F&O lots, capped by both risk and affordability. NSE/BSE/MCX lot
+  sizes auto-fill (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
+
+### Market news + sentiment
+- **Headlines** from publisher RSS feeds for 🇮🇳 India, 🇺🇸 US, and 🪙
+  crypto (Economic Times, CNBC, CoinDesk + Google News topic feeds).
+- **Per-headline sentiment** — keyword analysis marks bullish/bearish reads
+  (word-boundary matching, so "update" doesn't count as "up").
+- **Overall verdict per market** — an India / US / crypto / combined summary:
+  *Likely bullish*, *Likely bearish*, **Mixed signals** or *No clear signals*,
+  with the ↑/↓ tally shown so you can see the basis. Verdicts need at least 3
+  directional headlines — two headlines are gossip, not a trend. Sentiment is
+  informational mood-reading, never a trading signal.
+- 10-minute cache for polite re-opens; failed feeds are listed by name with a
+  retry — nothing is faked.
+
+### Live data & privacy
+- **Live crypto P&L** — optional 10-second quotes from Binance's free public
+  price API for open crypto positions only; unrealized P&L (+% on margin) and
+  an honest status line. Quotes stay in memory, never stored or synced.
+  Stock/futures/forex positions show "manual" — no fabricated prices.
+- **Folder sync (`trades_data/`)** — optional local mirror of the journal to
+  a folder you pick once (trades.json, rules.txt, capital.json). Chromium
+  browsers only. Restore from the folder is a guarded confirm.
+- **Where your data lives** — trades, rules, capitals and news cache in
+  browser localStorage; screenshots in IndexedDB; the optional
+  `trades_data/` mirror on your disk. Exports (CSV/JSON) download to your
+  Downloads folder. Nothing is uploaded anywhere.
+- **Network activity is read-only and opt-out-able**: Binance quotes
+  (toggle in Settings) and news feed fetches via public CORS relays. No
+  credentials, no telemetry.
 
 ## Getting started
 
 ```bash
 npm install
 npm run dev      # start the dev server
-npm run test     # run the vitest suite (calculations, persistence, UI workflows)
+npm run test     # vitest suite — calculations, persistence, UI workflows
 npm run lint     # eslint
-npm run build    # production build
+npm run build    # production build to dist/
 ```
 
-## Data model
+Default market is **India (₹ INR)**; switch India/US from the sidebar.
 
-A trade record (`src/lib/schema.js`): `id`, `symbol`, `market` (stocks,
-futures, forex, crypto, options), `direction` (long/short), `entryPrice`,
-`exitPrice`, `quantity`, `entryDate`, `exitDate`, `fees`, `strategy`,
-`setup`, `notes`, `createdAt`.
+## P&L conventions
 
-Conventions:
+- Long: `(exit − entry) × qty` · Short: `(entry − exit) × qty`
+- **Net P&L = gross − fees** — wins, losses, win rate, profit factor and
+  expectancy are all net-based.
+- `exitPrice === null` means open (status is derived, never stored). An exit
+  of `0` is a legal close, not "open".
+- `invested` = explicit amount, else `entry × qty ÷ leverage`, and return on
+  invested uses net P&L over that.
+- Per-currency ledgers (`computeCurrencyBreakdown`) keep ₹ and $ apart;
+  ratios are per-ledger, never merged.
 
-- `status` is always derived from `exitPrice === null` (never stored), so
-  differences between stored status flags and arithmetic can't happen.
-- Long P&L: `(exit − entry) × qty`. Short P&L: `(entry − exit) × qty`.
-  Net P&L subtracts fees. Exit price `0` is a valid close (an exercised
-  short, for example), not an "open" marker.
-- Calendar math uses `YYYY-MM-DD` strings compared lexicographically.
+## Data model (abridged)
+
+`src/lib/schema.js` — a trade is `id`, `symbol`, `market` (stocks / futures /
+forex / crypto / options), `direction` (long / short), `entryPrice`,
+`exitPrice (null = open)`, `quantity`, `invested`, `leverage`,
+`takeProfit`, `stopLoss`, `currency` (INR / USD), `entryDate`, `exitDate`,
+`fees`, `strategy`, `setup`, `notes`, `hasScreenshot`, `createdAt`.
+Dates are `YYYY-MM-DD` strings. Full contracts and calculation definitions
+live in [`CONTRACTS.md`](CONTRACTS.md).
 
 ## Project layout
 
 ```
 src/
-  lib/            pure logic: schema/validation, calculations, storage, format, export
-  hooks/          useTrades — single source of truth, localStorage-backed
-  components/     UI: sidebar, dashboard, trade table/form, settings
-  tests/          vitest unit + integration tests
+  lib/           pure logic — schema + validation, calculations, storage,
+                 formatting, export/import, Binance quotes, news feeds,
+                 folder sync, screenshots, settings/capital/rules storage
+  hooks/         useTrades (journal state + persistence), useLivePrices,
+                 useCurrency
+  components/    sidebar, dashboard, trade table + form, settings, rules,
+                 news, calculator
+  tests/         vitest unit + integration tests (150 tests)
 ```
+
+## Browser support
+
+- Anywhere modern for journaling and analytics.
+- **Folder sync requires the File System Access API** (Chrome / Edge / other
+  Chromium). Firefox / Safari get an honest "not available here" message.
+
+## Privacy in one line
+
+Your journal never leaves your device: no account, no server, no upload —
+the only network calls are public price quotes and news feeds, and both are
+read-only and switchable.
