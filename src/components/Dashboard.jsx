@@ -10,6 +10,9 @@
  * Props:
  *   stats         computeStats(trades) result (see src/lib/calculations.js)
  *   trades        Trade[] (see src/lib/schema.js)
+ *   livePrices    useLivePrices() output — Binance quotes for open crypto
+ *   liveNse       useIndianPrices() output — NSE stock quotes via relay,
+ *                 polled only during NSE trading hours
  *   onAddTrade    () => void — open the form in "new" mode
  *   onEditTrade   (trade) => void — open the form for an existing trade
  *   onViewTrades  () => void — switch to the trades view
@@ -52,20 +55,27 @@ function directionBadge(direction) {
   );
 }
 
-/** Honest status line for the live crypto feed (in the open positions header). */
-function LivePriceStatus({ live = null, symbolCount = 0 }) {
+/** Honest status line for a live feed (in the open positions header). */
+function LivePriceStatus({ live = null, symbolCount = 0, kind = 'crypto' }) {
   if (!live || symbolCount === 0) return null;
   const { status, errors = {}, lastUpdated = null, POLL_MS } = live;
   const failedSymbols = Object.keys(errors);
+  const nse = kind === 'nse';
   let label;
   if (status === 'live' || status === 'partial') {
-    label = `Live every ${Math.round(POLL_MS / 1000)}s`;
+    label = nse
+      ? `NSE quotes every ${Math.round(POLL_MS / 1000)}s`
+      : `Live every ${Math.round(POLL_MS / 1000)}s`;
   } else if (status === 'error') {
-    label = failedSymbols.some((sym) => errors[sym] === 'offline')
-      ? 'Connection failed — retrying…'
-      : 'Quotes unavailable';
+    label = nse
+      ? 'NSE quotes unavailable — showing manual'
+      : failedSymbols.some((sym) => errors[sym] === 'offline')
+        ? 'Connection failed — retrying…'
+        : 'Quotes unavailable';
   } else if (status === 'paused') {
     label = 'Paused (tab hidden)';
+  } else if (status === 'closed') {
+    label = 'NSE closed — quotes resume 9:15 IST';
   } else {
     label = 'Waiting for first price…';
   }
@@ -74,7 +84,7 @@ function LivePriceStatus({ live = null, symbolCount = 0 }) {
     ? ` · ${failedSymbols.join(', ')}: ${failedSymbols.map((sym) => errors[sym]).join(', ')}`
     : '';
   return (
-    <span className="live-status" role="status">
+    <span className="live-status" role="status" title={nse ? 'Yahoo chart API through the news page’s public relays' : 'Binance public ticker API'}>
       <span className={`live-dot ${status === 'live' || status === 'partial' ? 'on' : ''}`} aria-hidden="true" />
       {label}
       {asOf}
@@ -90,6 +100,7 @@ export default function Dashboard({
   trades = [],
   capital = null,
   livePrices = null,
+  liveNse = null,
   onAddTrade,
   onEditTrade,
   onDeleteTrade = () => {},
@@ -120,6 +131,9 @@ export default function Dashboard({
   const openTrades = filterTrades(trades, { status: 'open' });
   const openCryptoSymbols = openTrades
     .filter((t) => t.market === 'crypto')
+    .map((t) => String(t.symbol || '').trim().toUpperCase());
+  const openNseSymbols = openTrades
+    .filter((t) => t.market === 'stocks' && t.currency === 'INR')
     .map((t) => String(t.symbol || '').trim().toUpperCase());
 
   // Per-market ledgers: active market leads, other market surfaces in subs.
@@ -343,6 +357,7 @@ export default function Dashboard({
               Open positions
             </h2>
             <LivePriceStatus live={livePrices} symbolCount={openCryptoSymbols.length} />
+            <LivePriceStatus live={liveNse} symbolCount={openNseSymbols.length} kind="nse" />
             <span className="badge badge-open">{s.open} open</span>
           </div>
           <table className="trades-table">
@@ -365,11 +380,17 @@ export default function Dashboard({
             </thead>
             <tbody>
               {openTrades.map((trade) => {
-                const quote = livePrices?.prices?.[String(trade.symbol).trim().toUpperCase()];
+                const symbolKey = String(trade.symbol).trim().toUpperCase();
+                const isCrypto = trade.market === 'crypto';
+                const isNseStock = trade.market === 'stocks' && trade.currency === 'INR';
+                const quote = isCrypto
+                  ? livePrices?.prices?.[symbolKey]
+                  : isNseStock
+                    ? liveNse?.prices?.[symbolKey]
+                    : null;
                 const lastPrice = quote?.price ?? null;
                 const pennies = unrealizedPnl(trade, lastPrice);
                 const roiOnMargin = unrealizedReturnOnInvested(trade, lastPrice);
-                const isCrypto = trade.market === 'crypto';
                 const tpDist = distanceToTakeProfit(trade, lastPrice);
                 const slDist = distanceToStopLoss(trade, lastPrice);
                 const tpHit = takeProfitHit(trade, lastPrice);
@@ -380,17 +401,22 @@ export default function Dashboard({
                     <td>{directionBadge(trade.direction)}</td>
                     <td className="mono num">{formatCurrency(trade.entryPrice, trade.currency)}</td>
                     <td className="mono num">
-                      {isCrypto ? (
-                        lastPrice != null ? (
-                          <span className="live-cell">
-                            <span className="live-dot" aria-hidden="true" />
-                            {formatCurrency(lastPrice, trade.currency)}
-                          </span>
-                        ) : (
-                          <span className="muted">waiting…</span>
-                        )
+                      {lastPrice != null ? (
+                        <span className="live-cell">
+                          <span className="live-dot" aria-hidden="true" />
+                          {formatCurrency(lastPrice, trade.currency)}
+                        </span>
+                      ) : isCrypto ? (
+                        <span className="muted">waiting…</span>
                       ) : (
-                        <span className="muted" title={`No live feed for ${trade.market} — note the price you exit at`}>
+                        <span
+                          className="muted"
+                          title={
+                            isNseStock
+                              ? 'NSE quote unavailable right now (outside NSE hours or relay busy) — prices stay manual'
+                              : `No live feed for ${trade.market} — note the price you exit at`
+                          }
+                        >
                           manual
                         </span>
                       )}

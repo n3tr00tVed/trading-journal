@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTrades } from './hooks/useTrades.js';
 import { useLivePrices } from './hooks/useLivePrices.js';
+import { useIndianPrices } from './hooks/useIndianPrices.js';
 import { loadCapitals, saveCapitals } from './lib/capitalStorage.js';
 import { loadRules } from './lib/rulesStorage.js';
 import { isTradeOpen } from './lib/schema.js';
 import { CurrencyContext } from './hooks/useCurrency.js';
-import { loadCurrency, saveCurrency, loadLivePrices, saveLivePrices } from './lib/settingsStorage.js';
+import { loadCurrency, saveCurrency, loadLivePrices, saveLivePrices, loadIndianLivePrices, saveIndianLivePrices } from './lib/settingsStorage.js';
 import { putScreenshot, deleteScreenshot, getScreenshot } from './lib/screenshots.js';
 import {
   connectJournalDirectory,
@@ -51,12 +52,18 @@ function App() {
   const [capitals, setCapitals] = useState(() => loadCapitals()); // { INR, USD }
   const [currency, setCurrency] = useState(() => loadCurrency());
   const [livePrices, setLivePrices] = useState(() => loadLivePrices());
+  const [indianLivePrices, setIndianLivePrices] = useState(() => loadIndianLivePrices());
   const marketCapital = capitals?.[currency] ?? null;
 
   // ---- live crypto prices ----
   // In-memory quotes from Binance's public API (see src/lib/marketData.js);
   // the hook no-ops entirely when there are no open crypto trades.
   const live = useLivePrices(trades, { enabled: livePrices === true });
+
+  // ---- live NSE quotes ----
+  // Yahoo chart API through the news page's public relays; the hook only
+  // polls during NSE trading hours and no-ops without open Indian stocks.
+  const liveNse = useIndianPrices(trades, { enabled: indianLivePrices === true });
 
   // ---- trades_data folder sync ----
   const syncSupported = supportedDirectorySync();
@@ -309,6 +316,19 @@ function App() {
     }
   }, []);
 
+  /** Live NSE quote toggle (Settings) — polls only during NSE hours. */
+  const changeIndianLivePrices = useCallback((next) => {
+    if (saveIndianLivePrices(next === true)) {
+      setIndianLivePrices(next === true);
+      setToast({
+        message: next === true
+          ? 'Live NSE quotes on (Yahoo via public relay, NSE hours only).'
+          : 'Live NSE quotes off — open positions show manual again.',
+        tone: 'pos',
+      });
+    }
+  }, []);
+
   const handleSaveCapitals = useCallback(
     (map) => {
       const saved = saveCapitals(map);
@@ -385,6 +405,7 @@ function App() {
               trades={trades ?? []}
               capital={marketCapital}
               livePrices={live}
+              liveNse={liveNse}
               onAddTrade={openNewTrade}
               onEditTrade={openEditTrade}
               onDeleteTrade={handleDeleteTrade}
@@ -397,6 +418,7 @@ function App() {
             <TradesPage
               trades={trades ?? []}
               livePrices={live}
+              liveNse={liveNse}
               onAdd={openNewTrade}
               onEdit={openEditTrade}
               onDelete={handleDeleteTrade}
@@ -430,6 +452,8 @@ function App() {
               onRestoreFromFolder={handleRestoreFromFolder}
               livePrices={livePrices}
               onLivePricesChange={changeLivePrices}
+              indianLivePrices={indianLivePrices}
+              onIndianLivePricesChange={changeIndianLivePrices}
             />
           )}
         </main>

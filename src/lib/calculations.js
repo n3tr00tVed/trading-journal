@@ -421,3 +421,22 @@ function monthLabelOf(key) {
   const [year, month] = key.split('-').map(Number);
   return `${MONTH_NAMES[month - 1]} ${year}`;
 }
+
+/**
+ * Crypto swap exit price — what each unit of the sold coin was effectively
+ * sold for when the position went out as a swap: value received
+ * (receivedQuantity × receivedPrice) ÷ quantitySold. The form fills the
+ * trade's exit price from this, so the swap journals as a normal close of
+ * the sold coin and every existing P&L rule keeps working.
+ * Returns null when any input isn't a positive finite number.
+ */
+export function swapExitPrice(quantitySold, receivedQuantity, receivedPrice) {
+  if (
+    !isFiniteNumber(quantitySold) || quantitySold <= 0 ||
+    !isFiniteNumber(receivedQuantity) || receivedQuantity <= 0 ||
+    !isFiniteNumber(receivedPrice) || receivedPrice <= 0
+  ) {
+    return null;
+  }
+  return round2((receivedQuantity * receivedPrice) / quantitySold);
+}

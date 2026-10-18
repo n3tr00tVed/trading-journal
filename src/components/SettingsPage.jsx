@@ -61,6 +61,8 @@ export default function SettingsPage({
   onRestoreFromFolder,
   livePrices = false,
   onLivePricesChange,
+  indianLivePrices = false,
+  onIndianLivePricesChange,
 }) {
   const [status, setStatus] = useState(null); // { kind: 'ok'|'error'|'info', message, details? }
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -189,9 +191,8 @@ export default function SettingsPage({
         <h2 id="settings-live-prices-heading">Live crypto prices</h2>
         <p>
           While on, open crypto positions quote roughly every 10 seconds from Binance&apos;s free public API so their
-          P&amp;L updates as the price moves. This is the app&apos;s only network use: it sends nothing but the symbols
+          P&amp;L updates as the price moves. This sends nothing but the symbols
           being quoted, needs no account, and prices are never stored in your journal or synced to disk.
-          Other markets (stocks, futures, forex) have no free browser-friendly feed and stay manual.
         </p>
         <div className="checkbox-label">
           <input
@@ -201,6 +202,26 @@ export default function SettingsPage({
             onChange={(event) => onLivePricesChange?.(event.target.checked)}
           />
           <label htmlFor="live-prices-checkbox">Fetch live prices for open crypto positions</label>
+        </div>
+      </section>
+
+      <section className="card" aria-labelledby="settings-nse-prices-heading">
+        <h2 id="settings-nse-prices-heading">Live Indian market quotes</h2>
+        <p>
+          While on, open Indian stock positions (NSE equities, ₹ ledger) quote roughly every 60 seconds
+          through the same public relays the news page uses — Yahoo&apos;s public chart API in
+          between, no account, nothing stored. Polling runs only during NSE trading hours
+          (Mon–Fri 09:15–15:30 IST) and quotes pause honestly outside them. Futures, options, and
+          forex have no free browser-friendly feed and stay manual.
+        </p>
+        <div className="checkbox-label">
+          <input
+            type="checkbox"
+            id="nse-prices-checkbox"
+            checked={indianLivePrices === true}
+            onChange={(event) => onIndianLivePricesChange?.(event.target.checked)}
+          />
+          <label htmlFor="nse-prices-checkbox">Fetch live NSE quotes for open Indian stock positions</label>
         </div>
       </section>
 

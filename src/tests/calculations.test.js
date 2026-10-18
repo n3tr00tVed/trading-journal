@@ -14,7 +14,7 @@ import {
   tradeReturnOnInvested,
 } from '../lib/calculations.js';
 import { createTrade, normalizeTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
-import { monthlyBreakdown } from '../lib/calculations.js';
+import { monthlyBreakdown, swapExitPrice } from '../lib/calculations.js';
 
 /** Helper: trade with a default valid symbol; fees handled explicitly. */
 function trade(fields) {
@@ -506,7 +506,33 @@ describe('monthlyBreakdown', () => {
   it('empty input yields [] and trades without a usable exit month are skipped', () => {
     expect(monthlyBreakdown([])).toEqual([]);
     expect(monthlyBreakdown(null)).toEqual([]);
-    const undateable = createTrade({ entryPrice: 1, exitPrice: 2, quantity: 1, entryDate: '2026-01-01', exitDate: '', currency: 'INR' });
-    expect(monthlyBreakdown([undateable])).toEqual([]);
+    // Documented normalizeTrade rule: a closed trade without an exit date
+    // inherits its entry date — Jan 1 here, so it lands in January.
+    const undated = createTrade({ symbol: 'TST', entryPrice: 1, exitPrice: 2, quantity: 1, entryDate: '2026-01-01', exitDate: '', currency: 'INR' });
+    const rows = monthlyBreakdown([undated]);
+    expect(rows.map((row) => row.label)).toEqual(['Jan 2026']);
+    // Genuinely unusable exit data (raw record, bypassing normalization)
+    // cannot be placed month-wise and is skipped rather than faked.
+    const garbled = { id: 'g', symbol: 'X', market: 'stocks', currency: 'INR', entryPrice: 1, exitPrice: 2, quantity: 1, entryDate: null, exitDate: 'garbage' };
+    expect(monthlyBreakdown([garbled])).toEqual([]);
+  });
+});
+
+describe('swapExitPrice', () => {
+  it('computes the per-unit value received for the sold coin', () => {
+    // 10 BTC swapped for 200 SOL @ $50 → $10,000 received ÷ 10 = $1000/BTC.
+    expect(swapExitPrice(10, 200, 50)).toBe(1000);
+    // Fractional quantities survive rounding to 2dp.
+    expect(swapExitPrice(0.35, 4.2, 12.5)).toBe(150);
+  });
+
+  it('declares invalid inputs null instead of NaN or 0', () => {
+    expect(swapExitPrice(0, 1, 1)).toBe(null);
+    expect(swapExitPrice(-1, 1, 1)).toBe(null);
+    expect(swapExitPrice(1, 0, 1)).toBe(null);
+    expect(swapExitPrice(1, 1, 0)).toBe(null);
+    expect(swapExitPrice(NaN, 1, 1)).toBe(null);
+    expect(swapExitPrice(1, Infinity, 1)).toBe(null);
+    expect(swapExitPrice(undefined, 1, 1)).toBe(null);
   });
 });

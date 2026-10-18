@@ -12,6 +12,9 @@ export const DEFAULT_CURRENCY = 'INR';
 /** Live crypto quoting is opt-in-by-default (the feature the user asked for). */
 export const DEFAULT_LIVE_PRICES = true;
 
+/** NSE quotes default on too; the poller itself only runs during NSE hours. */
+export const DEFAULT_INDIAN_LIVE_PRICES = true;
+
 function readSettings() {
   if (typeof window === 'undefined') return null;
   try {
@@ -38,6 +41,12 @@ export function loadLivePrices() {
   return typeof parsed.livePrices === 'boolean' ? parsed.livePrices : DEFAULT_LIVE_PRICES;
 }
 
+export function loadIndianLivePrices() {
+  const parsed = readSettings();
+  if (!parsed) return DEFAULT_INDIAN_LIVE_PRICES;
+  return typeof parsed.indianLivePrices === 'boolean' ? parsed.indianLivePrices : DEFAULT_INDIAN_LIVE_PRICES;
+}
+
 function writeSettings(patch) {
   try {
     const previous = readSettings() ?? {};
@@ -59,4 +68,10 @@ export function saveCurrency(currency) {
 export function saveLivePrices(enabled) {
   if (typeof enabled !== 'boolean') return false;
   return writeSettings({ livePrices: enabled });
+}
+
+/** Toggles the NSE live-quote poller (Yahoo via relay, NSE hours only). */
+export function saveIndianLivePrices(enabled) {
+  if (typeof enabled !== 'boolean') return false;
+  return writeSettings({ indianLivePrices: enabled });
 }

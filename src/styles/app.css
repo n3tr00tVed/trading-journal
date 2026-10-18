@@ -1182,6 +1182,12 @@ button {
   font-size: 13px;
 }
 
+.swap-panel {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  padding: 10px var(--space-3, 12px);
+}
+
 /* ---- Live crypto prices (open positions) ---- */
 
 .live-status {

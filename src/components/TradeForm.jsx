@@ -14,6 +14,8 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { DIRECTIONS, MARKETS, validateTrade } from '../lib/schema.js';
 import { getScreenshot } from '../lib/screenshots.js';
+import { swapExitPrice } from '../lib/calculations.js';
+import { fetchCryptoPrices } from '../lib/marketData.js';
 import { formatCurrency } from '../lib/format.js';
 import { useCurrency } from '../hooks/useCurrency.js';
 
@@ -220,6 +222,191 @@ function buildValues(draft) {
   };
 }
 
+/**
+ * Crypto swap helper — crypto accounts often move one coin directly into
+ * another (BTC → SOL) instead of selling into fiat first. This panel turns
+ * that movement into the trade's exit side: value received
+ * (receivedQty × receivedPrice) ÷ qty sold becomes the exit price, so the
+ * swap journals as an honest close of the sold coin and every P&L rule
+ * keeps working. Available for crypto trades only.
+ */
+function SwapPanel({ idBase, tradeCurrency, quantity, onApply }) {
+  const [open, setOpen] = useState(false);
+  const [fromQty, setFromQty] = useState('');
+  const [toCoin, setToCoin] = useState('');
+  const [toQty, setToQty] = useState('');
+  const [toPriceUsd, setToPriceUsd] = useState('');
+  const [usdInrRate, setUsdInrRate] = useState('');
+  const [fetching, setFetching] = useState(false);
+  const [msg, setMsg] = useState(null); // { tone: 'pos' | 'neg', text }
+
+  const toggle = () => {
+    if (!open) {
+      setFromQty(quantity || ''); // prefill with the position being exited
+      setMsg(null);
+    }
+    setOpen(!open);
+  };
+
+  const fetchPrice = async () => {
+    const coin = toCoin.trim().toUpperCase();
+    if (!coin) {
+      setMsg({ tone: 'neg', text: 'Type the coin you received first (e.g. SOL).' });
+      return;
+    }
+    setFetching(true);
+    setMsg(null);
+    try {
+      const { prices, errors } = await fetchCryptoPrices([coin]);
+      const hit = prices[coin];
+      if (hit) {
+        setToPriceUsd(String(hit.price));
+        setMsg({
+          tone: 'pos',
+          text: `Fetched ${coin} = $${hit.price} (Binance public API). Review the USD→INR rate before applying.`,
+        });
+      } else {
+        setMsg({
+          tone: 'neg',
+          text: `Could not fetch ${coin}: ${errors[coin] ?? 'unavailable'}. Enter its price manually.`,
+        });
+      }
+    } catch {
+      setMsg({ tone: 'neg', text: 'Price fetch failed — enter the received coin’s price manually.' });
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  const apply = () => {
+    const price = Number(toPriceUsd);
+    const rate = tradeCurrency === 'INR' ? Number(usdInrRate) : 1;
+    const effectivePrice = tradeCurrency === 'INR' && rate > 0 ? price * rate : price;
+    const exit = swapExitPrice(Number(fromQty), Number(toQty), effectivePrice);
+    if (exit === null) {
+      setMsg({ tone: 'neg', text: 'All three amounts must be positive numbers (rate too, when INR).' });
+      return;
+    }
+    onApply({
+      exitPrice: exit,
+      note: `Swap: ${Number(fromQty)} units sold for ${Number(toQty)} ${toCoin.trim().toUpperCase()} @ ${effectivePrice.toFixed(4)} per coin (${tradeCurrency === 'INR' ? 'USD→INR applied' : 'USD quote'}).`,
+    });
+    setMsg({ tone: 'pos', text: `Exit price filled: ${formatCurrency(exit, tradeCurrency)} per sold unit. Review, then save.` });
+  };
+
+  if (!open) {
+    return (
+      <div className="field">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={toggle}>
+          🔁 Log a swap (exchanged into another coin)
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="field swap-panel">
+      <div className="field-row">
+        <div className="field">
+          <label className="label" htmlFor={`${idBase}-swapFrom`}>
+            Quantity sold
+          </label>
+          <input
+            id={`${idBase}-swapFrom`}
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            value={fromQty}
+            onChange={(e) => setFromQty(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor={`${idBase}-swapToCoin`}>
+            Received coin
+          </label>
+          <input
+            id={`${idBase}-swapToCoin`}
+            type="text"
+            value={toCoin}
+            onChange={(e) => setToCoin(e.target.value)}
+            placeholder="e.g. SOL"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+      <div className="field-row">
+        <div className="field">
+          <label className="label" htmlFor={`${idBase}-swapToQty`}>
+            Received qty
+          </label>
+          <input
+            id={`${idBase}-swapToQty`}
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            value={toQty}
+            onChange={(e) => setToQty(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor={`${idBase}-swapToPrice`}>
+            Received coin price (USD)
+          </label>
+          <input
+            id={`${idBase}-swapToPrice`}
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            value={toPriceUsd}
+            onChange={(e) => setToPriceUsd(e.target.value)}
+            placeholder="coin's USD price"
+          />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={fetchPrice} disabled={fetching}>
+            {fetching ? 'Fetching…' : 'Fetch from Binance'}
+          </button>
+        </div>
+      </div>
+      {tradeCurrency === 'INR' && (
+        <div className="field">
+          <label className="label" htmlFor={`${idBase}-swapRate`}>
+            USD → INR rate used in your trade
+          </label>
+          <input
+            id={`${idBase}-swapRate`}
+            type="number"
+            step="any"
+            min="0"
+            inputMode="decimal"
+            value={usdInrRate}
+            onChange={(e) => setUsdInrRate(e.target.value)}
+            placeholder="e.g. 88.5"
+          />
+        </div>
+      )}
+      <p className="page-sub">
+        Exit value = received qty × received price ÷ quantity sold; the trade closes with that exit
+        price. Everything stays on this device — the fetched quote is market data only.
+      </p>
+      {msg && (
+        <p className={msg.tone === 'pos' ? 'page-sub' : 'field-error'} role="status">
+          {msg.text}
+        </p>
+      )}
+      <div className="form-actions">
+        <button type="button" className="btn btn-ghost btn-sm" onClick={toggle}>
+          Hide swap panel
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={apply}>
+          Apply to exit price
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TradeForm({ initial = null, onSave, onCancel }) {
   const id = useId();
   const [draft, setDraft] = useState(() => draftFrom(initial));
@@ -292,6 +479,22 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
       ...d,
       isOpen: checked,
       ...(checked ? { exitPrice: '', exitDate: '' } : {}),
+    }));
+  };
+
+  /**
+   * Crypto swap: the helper computed the exit price from the received side;
+   * applying closes the trade (open → closed, today's date by default) and
+   * records what happened in Notes. The user reviews everything before
+   * saving — nothing here bypasses validation on submit.
+   */
+  const applySwap = ({ exitPrice, note }) => {
+    setDraft((d) => ({
+      ...d,
+      exitPrice: String(exitPrice),
+      isOpen: false,
+      exitDate: typeof d.exitDate === 'string' && d.exitDate.trim() ? d.exitDate : todayIso(),
+      notes: typeof d.notes === 'string' && d.notes.trim() ? `${d.notes.trim()}\n${note}` : note,
     }));
   };
 
@@ -451,6 +654,15 @@ export default function TradeForm({ initial = null, onSave, onCancel }) {
           </span>
         )}
       </div>
+
+      {draft.market === 'crypto' && (
+        <SwapPanel
+          idBase={id}
+          tradeCurrency={displayCurrency}
+          quantity={draft.quantity}
+          onApply={applySwap}
+        />
+      )}
 
       <div className="field">
         <label className="label" htmlFor={`${id}-quantity`}>

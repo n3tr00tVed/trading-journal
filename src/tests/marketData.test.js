@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchCryptoPrices, toBinanceSymbol, isCryptoTrade } from '../lib/marketData.js';
+import { fetchCryptoPrices, toBinanceSymbol, isCryptoTrade, toYahooSymbol, isNseMarketOpenNow, fetchIndianPrices } from '../lib/marketData.js';
 import { unrealizedPnl, unrealizedReturnOnInvested } from '../lib/calculations.js';
 import { createTrade } from '../lib/schema.js';
 
@@ -120,5 +120,99 @@ describe('fetchCryptoPrices', () => {
     const { prices, errors } = await fetchCryptoPrices(['BTC']);
     expect(prices).toEqual({});
     expect(errors.BTC).toBe('offline');
+  });
+});
+
+describe('toYahooSymbol', () => {
+  it('suffixes plain journal symbols with .NS and keeps explicit suffixes', () => {
+    expect(toYahooSymbol('RELIANCE')).toBe('RELIANCE.NS');
+    expect(toYahooSymbol(' reliance ')).toBe('RELIANCE.NS');
+    expect(toYahooSymbol('INFY.NS')).toBe('INFY.NS');
+    expect(toYahooSymbol('TATASTEEL.BO')).toBe('TATASTEEL.BO');
+  });
+
+  it('returns null for unusable symbols', () => {
+    expect(toYahooSymbol('')).toBe(null);
+    expect(toYahooSymbol(null)).toBe(null);
+    expect(toYahooSymbol('NIFTY 50')).toBe(null); // spaces are not equity symbols
+  });
+});
+
+describe('isNseMarketOpenNow', () => {
+  it('opens exactly during Mon–Fri 09:15–15:30 IST', () => {
+    // 2026-10-12 is a Monday. UTC 03:45 = 09:15 IST — open boundary.
+    expect(isNseMarketOpenNow(new Date('2026-10-12T03:45:00Z'))).toBe(true);
+    // 09:30 IST, mid-morning.
+    expect(isNseMarketOpenNow(new Date('2026-10-12T04:00:00Z'))).toBe(true);
+    // 15:30 IST close — still open at the boundary minute.
+    expect(isNseMarketOpenNow(new Date('2026-10-12T10:00:00Z'))).toBe(true);
+    // 15:31 IST — closed.
+    expect(isNseMarketOpenNow(new Date('2026-10-12T10:01:00Z'))).toBe(false);
+    // 09:14 IST — not yet.
+    expect(isNseMarketOpenNow(new Date('2026-10-12T03:44:00Z'))).toBe(false);
+    // Sunday (2026-10-11) — closed regardless of time.
+    expect(isNseMarketOpenNow(new Date('2026-10-11T05:00:00Z'))).toBe(false);
+    // Saturday morning.
+    expect(isNseMarketOpenNow(new Date('2026-10-10T05:00:00Z'))).toBe(false);
+  });
+
+  it('defaults to closed when the clock is unusable', () => {
+    expect(isNseMarketOpenNow(new Date('not-a-date'))).toBe(false);
+  });
+});
+
+describe('fetchIndianPrices', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterAll(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function yahooMeta(price) {
+    return JSON.stringify({ chart: { result: [{ meta: { regularMarketPrice: price, regularMarketTime: 1760600000 } }] } });
+  }
+
+  it('quotes NSE symbols through the relay chain and keys results by journal symbol', async () => {
+    fetch.mockImplementation(async (url) => {
+      if (url.includes('api.allorigins.win') && url.includes('RELIANCE.NS')) {
+        return { ok: true, text: async () => yahooMeta(1284.5) };
+      }
+      if (url.includes('api.codetabs.com') && url.includes('INFY.NS')) {
+        return { ok: true, text: async () => yahooMeta(1520) };
+      }
+      return { ok: false, status: 503 };
+    });
+
+    const { prices, errors } = await fetchIndianPrices(['RELIANCE', 'infy']);
+    expect(prices.RELIANCE).toMatchObject({ price: 1284.5 });
+    expect(prices.INFY.price).toBe(1520);
+    expect(errors).toEqual({});
+  });
+
+  it('surfaces throttled/no-quote honestly per symbol when every relay fails', async () => {
+    fetch.mockImplementation(async (url) => {
+      if (url.includes('TCS.NS')) return { ok: true, text: async () => '<html>cloudflare wall</html>' };
+      return { ok: false, status: 429 };
+    });
+
+    const { prices, errors } = await fetchIndianPrices(['WIPRO', 'TCS']);
+    expect(prices).toEqual({});
+    expect(errors.WIPRO).toBe('throttled');
+    expect(errors.TCS).toBe('no quote'); // junk payload ≠ throttle: a parse miss
+  });
+
+  it('reports nothing invented when the network is down', async () => {
+    fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+    const { prices, errors } = await fetchIndianPrices(['RELIANCE']);
+    expect(prices).toEqual({});
+    expect(errors.RELIANCE).toBe('no quote');
   });
 });

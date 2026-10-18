@@ -70,7 +70,7 @@ function NetPnlCell({ trade, price = null }) {
   );
 }
 
-export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot, livePrices = null }) {
+export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot, livePrices = null, liveNse = null }) {
   const [pendingDelete, setPendingDelete] = useState(null);
 
   function confirmDelete() {
@@ -107,9 +107,16 @@ export default function TradesTable({ trades, onEdit, onDelete, onViewScreenshot
               {trades.map((trade) => {
               const open = isTradeOpen(trade);
               const leverageTag = tradeLeverageLabel(trade);
-              const quote = open && livePrices
-                ? livePrices.prices?.[String(trade.symbol).trim().toUpperCase()]
+              // One quote source per market: Binance for crypto, the NSE
+              // relay (Yahoo chart API) for Indian stocks, none for the rest
+              // (futures/options/forex stay honestly manual).
+              const symbolKey = String(trade.symbol).trim().toUpperCase();
+              const isCryptoTrade = trade.market === 'crypto';
+              const isNseStock = trade.market === 'stocks' && trade.currency === 'INR';
+              const rawQuote = open
+                ? (isCryptoTrade ? livePrices?.prices?.[symbolKey] : isNseStock ? liveNse?.prices?.[symbolKey] : null)
                 : null;
+              const quote = rawQuote ?? null;
               return (
                 <tr key={trade.id}>
                   <td className="mono">
