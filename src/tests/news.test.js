@@ -189,13 +189,29 @@ describe('overallSentiment', () => {
 
   it('empty or junk input yields zeroed blank ledgers for every region', () => {
     const empty = overallSentiment([]);
-    for (const key of ['all', 'IN', 'US', 'CRYPTO']) {
+    for (const key of ['all', 'IN', 'US', 'CRYPTO', 'FOREX']) {
       expect(empty[key].total).toBe(0);
       expect(empty[key].tone).toBe('neutral');
       expect(empty[key].label).toBe('No clear signals');
     }
     const junk = overallSentiment(null);
     expect(junk.all.total).toBe(0);
+  });
+
+  it('tallies the forex region separately and folds it into the combined view', () => {
+    const s = overallSentiment([
+      { region: 'FOREX', sentiment: 'bearish' },
+      { region: 'FOREX', sentiment: 'bearish' },
+      { region: 'FOREX', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bullish' },
+    ]);
+    expect(s.FOREX.tone).toBe('bearish');
+    expect(s.FOREX.forecast).toBe('Market may fall');
+    // Only the forex leg carries classified weight above the sample floor;
+    // the combined bucket stays honest: 1 bullish vs 3 bearish over 4.
+    expect(s.all.bearish).toBe(3);
+    expect(s.all.bullish).toBe(1);
+    expect(s.all.tone).toBe('bearish');
   });
 
   it('frames each verdict as a forward forecast (may rise / may fall)', () => {

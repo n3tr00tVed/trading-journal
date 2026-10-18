@@ -476,6 +476,21 @@ describe('monthlyBreakdown', () => {
     expect(rows[0].netPnl.USD).toBe(10);
   });
 
+  it('partitions regions so every trade lands in exactly one view (crypto > forex > currency)', () => {
+    const cohort = [
+      createTrade({ id: 'cr', symbol: 'BTC', market: 'crypto', entryPrice: 100, exitPrice: 110, quantity: 1, entryDate: '2026-09-01', exitDate: '2026-09-05', currency: 'USD' }),
+      createTrade({ id: 'fx', symbol: 'USDINR', market: 'forex', entryPrice: 82, exitPrice: 84, quantity: 100, entryDate: '2026-09-01', exitDate: '2026-09-06', currency: 'INR' }),
+      createTrade({ id: 'us', symbol: 'AAPL', market: 'stocks', entryPrice: 20, exitPrice: 24, quantity: 1, entryDate: '2026-09-01', exitDate: '2026-09-07', currency: 'USD' }),
+      createTrade({ id: 'in', symbol: 'RELIANCE', market: 'stocks', entryPrice: 2500, exitPrice: 2600, quantity: 1, entryDate: '2026-09-01', exitDate: '2026-09-08', currency: 'INR' }),
+    ];
+    const closedIn = (r) => monthlyBreakdown(cohort, r).reduce((n, row) => n + row.closed, 0);
+    expect(closedIn('CRYPTO')).toBe(1);
+    expect(closedIn('FOREX')).toBe(1);
+    expect(closedIn('US')).toBe(1);
+    expect(closedIn('IN')).toBe(1);
+    expect(closedIn('all')).toBe(4); // nothing counted twice
+  });
+
   it('open trades appear only once they close — no empty placeholder rows', () => {
     const rows = monthlyBreakdown([
       createTrade({ id: 'open', symbol: 'TST', entryPrice: 5, quantity: 2, entryDate: '2026-05-01', exitPrice: null, currency: 'INR' }),

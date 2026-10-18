@@ -27,13 +27,14 @@ const RELAY = 'https://api.allorigins.win/raw?url=';
 const CACHE_KEY = 'trading-journal:news:cache:v1';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
-export const NEWS_REGIONS = ['all', 'IN', 'US', 'CRYPTO'];
+export const NEWS_REGIONS = ['all', 'IN', 'US', 'CRYPTO', 'FOREX'];
 
 export const NEWS_REGION_LABELS = {
   all: 'All markets',
   IN: '🇮🇳 India',
   US: '🇺🇸 US',
   CRYPTO: '🪙 Crypto',
+  FOREX: '💱 Forex',
 };
 
 /**
@@ -78,6 +79,12 @@ export const NEWS_SOURCES = [
     label: 'Google News · Crypto',
     region: 'CRYPTO',
     url: 'https://news.google.com/rss/search?q=crypto+OR+bitcoin+OR+ethereum&hl=en-US&gl=US&ceid=US:en',
+  },
+  {
+    id: 'gn-forex',
+    label: 'Google News · Forex & currencies',
+    region: 'FOREX',
+    url: 'https://news.google.com/rss/search?q=forex+OR+currency+OR+%22dollar+index%22+OR+rupee&hl=en-US&gl=US&ceid=US:en',
   },
 ];
 
@@ -236,7 +243,7 @@ export const MIN_SENTIMENT_SAMPLE = 3;
 export function overallSentiment(items = []) {
   const list = Array.isArray(items) ? items : [];
   const blank = () => ({ total: 0, bullish: 0, bearish: 0, neutral: 0 });
-  const tally = { all: blank(), IN: blank(), US: blank(), CRYPTO: blank() };
+  const tally = { all: blank(), IN: blank(), US: blank(), CRYPTO: blank(), FOREX: blank() };
 
   for (const item of list) {
     const sentiment =

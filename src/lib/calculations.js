@@ -346,20 +346,22 @@ export function sortTrades(trades, key = 'entryDate', dir = 'desc') {
  * point at the original records, nothing is copied.
  *
  * `region` scopes the statement to one market, mirroring the news page's
- * markets (see MONTHLY_REGIONS). Trades are partitioned — crypto wins
- * over currency, then currency decides — so a trade belongs to exactly
- * one region's view and no row is ever counted twice across regions:
+ * markets (see MONTHLY_REGIONS). Trades are partitioned — market wins over
+ * currency — so a trade belongs to exactly one region's view and no row is
+ * ever counted twice across regions:
  *   CRYPTO → market 'crypto', whatever its quoting currency
- *   US     → USD ledger, crypto excluded
+ *   FOREX  → market 'forex' (INR and USD legs both land here)
+ *   US     → USD ledger, crypto/forex excluded
  *   IN     → everything left (the INR ledger)
  *   'all'  → all trades together
  */
-export const MONTHLY_REGIONS = ['all', 'IN', 'US', 'CRYPTO'];
+export const MONTHLY_REGIONS = ['all', 'IN', 'US', 'CRYPTO', 'FOREX'];
 
-/** Exactly-one-bucket partition: crypto by market, then by currency. */
+/** Exactly-one-bucket partition: market decides first, then currency. */
 function tradeInRegion(trade, region) {
   if (region === 'all') return true;
   if (trade?.market === 'crypto') return region === 'CRYPTO';
+  if (trade?.market === 'forex') return region === 'FOREX';
   if (trade?.currency === 'USD') return region === 'US';
   return region === 'IN';
 }

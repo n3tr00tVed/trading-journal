@@ -28,6 +28,7 @@ const REGION_LABELS = {
   IN: '🇮🇳 India',
   US: '🇺🇸 US',
   CRYPTO: '🪙 Crypto',
+  FOREX: '💱 Forex',
 };
 
 /** The ledger this row leads with: the active one when the month touched it, else the other. */
@@ -131,7 +132,13 @@ export default function MonthlyReview({ trades = [] }) {
   // silently vanishing.
   const counts = useMemo(() => {
     const countFor = (r) => monthlyBreakdown(trades, r).reduce((n, row) => n + row.closed, 0);
-    return { all: countFor('all'), IN: countFor('IN'), US: countFor('US'), CRYPTO: countFor('CRYPTO') };
+    return {
+      all: countFor('all'),
+      IN: countFor('IN'),
+      US: countFor('US'),
+      CRYPTO: countFor('CRYPTO'),
+      FOREX: countFor('FOREX'),
+    };
   }, [trades]);
 
   if (counts.all === 0) return null;

@@ -107,8 +107,8 @@ function NewsSkeleton() {
  */
 function SentimentSummary({ summary }) {
   // Reading order: combined first, then the markets in the same order as
-  // the region tabs (India → US → crypto).
-  const order = ['all', 'IN', 'US', 'CRYPTO'];
+  // the region tabs (India → US → crypto → forex).
+  const order = ['all', 'IN', 'US', 'CRYPTO', 'FOREX'];
   const toneClass = { bullish: 'badge-bullish', bearish: 'badge-bearish', mixed: 'badge-neutral', neutral: 'badge-neutral' };
   const toneDot = { bullish: 'pnl-pos', bearish: 'pnl-neg', mixed: 'pnl-flat', neutral: 'pnl-flat' };
 
@@ -177,7 +177,7 @@ export default function NewsPage() {
 
   const counts = useMemo(() => {
     const tally = { all: items.length };
-    for (const key of ['IN', 'US', 'CRYPTO']) {
+    for (const key of ['IN', 'US', 'CRYPTO', 'FOREX']) {
       tally[key] = items.filter((item) => item.region === key).length;
     }
     return tally;
