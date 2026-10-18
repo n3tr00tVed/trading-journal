@@ -14,6 +14,7 @@ import {
   tradeReturnOnInvested,
 } from '../lib/calculations.js';
 import { createTrade, normalizeTrade, validateTrade, isTradeOpen } from '../lib/schema.js';
+import { monthlyBreakdown } from '../lib/calculations.js';
 
 /** Helper: trade with a default valid symbol; fees handled explicitly. */
 function trade(fields) {
@@ -440,5 +441,57 @@ describe('sortTrades', () => {
     const input = [lose, win];
     expect(sortTrades(input, 'netPnl', 'desc')[0].symbol).toBe('M');
     expect(input).toEqual([lose, win]);
+  });
+});
+
+describe('monthlyBreakdown', () => {
+  it('groups closed trades by the month they CLOSED and sorts newest first', () => {
+    const rows = monthlyBreakdown([
+      createTrade({ id: 'a', symbol: 'TST', entryPrice: 100, exitPrice: 110, quantity: 1, entryDate: '2026-07-01', exitDate: '2026-07-15', currency: 'INR' }),
+      createTrade({ id: 'b', symbol: 'TST', entryPrice: 200, exitPrice: 190, quantity: 1, entryDate: '2026-01-02', exitDate: '2026-08-05', currency: 'INR' }),
+      createTrade({ id: 'c', symbol: 'TST', entryPrice: 50, exitPrice: 60, quantity: 2, entryDate: '2026-02-02', exitDate: '2026-07-20', currency: 'INR' }),
+    ]);
+    expect(rows.map((row) => row.label)).toEqual(['Aug 2026', 'Jul 2026']);
+    const july = rows[1];
+    expect(july.closed).toBe(2);
+    expect(july.wins).toBe(2);
+    expect(july.losses).toBe(0);
+    expect(july.netPnl.INR).toBe(30);
+    // Expanding a month shows exactly the trades realized in it.
+    expect(july.trades.map((t) => t.id)).toEqual(['a', 'c']);
+    const august = rows[0];
+    expect(august.closed).toBe(1);
+    expect(august.losses).toBe(1);
+    expect(august.netPnl.INR).toBe(-10);
+  });
+
+  it('never merges currencies within a month and marks the ledgers it touched', () => {
+    const rows = monthlyBreakdown([
+      createTrade({ id: 'i', symbol: 'TST', entryPrice: 10, exitPrice: 9, quantity: 10, entryDate: '2026-09-01', exitDate: '2026-09-30', currency: 'INR' }),
+      createTrade({ id: 'u', symbol: 'TST', entryPrice: 10, exitPrice: 12, quantity: 5, entryDate: '2026-09-02', exitDate: '2026-09-28', currency: 'USD' }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].currencies).toEqual(['INR', 'USD']);
+    expect(rows[0].netPnl.INR).toBe(-10);
+    expect(rows[0].netPnl.USD).toBe(10);
+  });
+
+  it('open trades appear only once they close — no empty placeholder rows', () => {
+    const rows = monthlyBreakdown([
+      createTrade({ id: 'open', symbol: 'TST', entryPrice: 5, quantity: 2, entryDate: '2026-05-01', exitPrice: null, currency: 'INR' }),
+      createTrade({ id: 'closed', symbol: 'TST', entryPrice: 4, exitPrice: 6, quantity: 1, entryDate: '2026-05-02', exitDate: '2026-10-01', currency: 'INR' }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].label).toBe('Oct 2026');
+    expect(rows[0].netPnl.INR).toBe(2);
+    // The open trade stays out entirely — not tallied, not listed.
+    expect(rows[0].trades.map((t) => t.id)).toEqual(['closed']);
+  });
+
+  it('empty input yields [] and trades without a usable exit month are skipped', () => {
+    expect(monthlyBreakdown([])).toEqual([]);
+    expect(monthlyBreakdown(null)).toEqual([]);
+    const undateable = createTrade({ entryPrice: 1, exitPrice: 2, quantity: 1, entryDate: '2026-01-01', exitDate: '', currency: 'INR' });
+    expect(monthlyBreakdown([undateable])).toEqual([]);
   });
 });

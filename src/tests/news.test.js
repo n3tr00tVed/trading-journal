@@ -197,6 +197,29 @@ describe('overallSentiment', () => {
     const junk = overallSentiment(null);
     expect(junk.all.total).toBe(0);
   });
+
+  it('frames each verdict as a forward forecast (may rise / may fall)', () => {
+    const s = overallSentiment([
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'IN', sentiment: 'bullish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'US', sentiment: 'bearish' },
+      { region: 'CRYPTO', sentiment: 'bullish' },
+      { region: 'CRYPTO', sentiment: 'bearish' },
+    ]);
+    expect(s.IN.tone).toBe('bullish');
+    expect(s.IN.forecast).toBe('Market may rise');
+    expect(s.IN.direction).toBe('up');
+    expect(s.US.tone).toBe('bearish');
+    expect(s.US.forecast).toBe('Market may fall');
+    expect(s.US.direction).toBe('down');
+    // 1 up + 1 down is not a verdict — unclear, and direction withheld.
+    expect(s.CRYPTO.tone).toBe('mixed');
+    expect(s.CRYPTO.forecast).toBe('Direction unclear');
+    expect(s.CRYPTO.direction).toBe(null);
+  });
 });
 
 describe('fetchNews', () => {
@@ -294,5 +317,48 @@ describe('fetchNews', () => {
     const forced = await fetchNews('all', { force: true });
     expect(fetch).toHaveBeenCalled();
     expect(forced.fromCache).toBe(false);
+  });
+
+  it('classifies sentiment on the rss2json path too — the primary fetch path', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: 'ok',
+        items: [
+          { title: 'Rupee slumps as markets fall on weak data', link: 'https://example.test/slump', pubDate: 'Fri, 16 Oct 2026 08:00:00 GMT', description: '<b>Weak</b> GDP print.' },
+          { title: 'Fed holds rates steady', link: 'https://example.test/hold', pubDate: '', description: 'Markets barely moved.' },
+        ],
+      }),
+    });
+    const result = await fetchNews('all', { force: true });
+    expect(result.errors).toEqual({});
+    // Same JSON served for every source: 2 items × NEWS_SOURCES.
+    expect(result.items).toHaveLength(NEWS_SOURCES.length * 2);
+    // The regression this locks: rss2json items MUST carry a sentiment —
+    // missing ones tally as neutral and starve the per-market verdicts.
+    expect(result.items.every((item) => item.sentiment)).toBe(true);
+    expect(result.items.some((item) => item.sentiment === 'bearish')).toBe(true);
+    expect(overallSentiment(result.items).all.bearish).toBe(NEWS_SOURCES.length);
+  });
+
+  it('pins the first working fetch path and reuses it on refresh (fewer relay hits)', async () => {
+    fetch.mockImplementation(async (url) => {
+      if (url.startsWith('https://api.rss2json.com/')) return { ok: false, status: 503 };
+      if (url.includes('api.allorigins.win')) return { ok: false, status: 503 };
+      if (url.includes('api.codetabs.com')) return { ok: true, text: async () => RSS_FIXTURE };
+      return { ok: false };
+    });
+
+    const first = await fetchNews('all', { force: true });
+    expect(first.errors).toEqual({});
+    // Discovery run: every source walks rss2json → allorigins → codetabs.
+    expect(fetch.mock.calls.length).toBeGreaterThan(NEWS_SOURCES.length);
+
+    fetch.mockClear();
+    const pinned = await fetchNews('all', { force: true });
+    expect(pinned.errors).toEqual({});
+    // Repeat refresh: the pinned codetabs path alone, one attempt per feed —
+    // fewer relay services see the same repeating client.
+    expect(fetch.mock.calls.length).toBe(NEWS_SOURCES.length);
   });
 });

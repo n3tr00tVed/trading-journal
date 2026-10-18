@@ -317,3 +317,105 @@ export function sortTrades(trades, key = 'entryDate', dir = 'desc') {
 
   return sorted;
 }
+
+/**
+ * Monthly P&L — a month-wise statement grouped by the month a trade CLOSED
+ * (the exitDate's YYYY-MM), so each calendar month carries exactly the net
+ * P&L that was realized in it. This is a reporting lens, not a new metric:
+ * every money number passes through the same tradeNetPnl the dashboard
+ * uses, so no total anywhere changes.
+ *
+ * Reading: "how much did I actually make or lose in Sep 2026?" Each closed
+ * trade lands in the calendar month of its exit — the month its P&L
+ * happened — regardless of which month it was taken in. Open trades appear
+ * only once they close (their realization month); until then they
+ * contribute to nothing here.
+ *
+ * Currency honesty applies month by month: money is reported per native
+ * trade currency ({INR, USD}) and rupees/dollars are never summed.
+ *
+ * Returns an array sorted newest month first; rows render as
+ *   { key: '2026-09', label: 'Sep 2026',
+ *     closed, wins, losses,
+ *     netPnl: { INR, USD }, currencies: ['USD', …],
+ *     trades: Trade[] }
+ * `currencies` lists every ledger the month touched (even a flat one), so
+ * UI can lead with the active ledger when present and surface the other.
+ * `trades` holds the trade objects themselves, in input order, so the UI
+ * can expand a month and show every trade realized in it — the references
+ * point at the original records, nothing is copied.
+ *
+ * `region` scopes the statement to one market, mirroring the news page's
+ * markets (see MONTHLY_REGIONS). Trades are partitioned — crypto wins
+ * over currency, then currency decides — so a trade belongs to exactly
+ * one region's view and no row is ever counted twice across regions:
+ *   CRYPTO → market 'crypto', whatever its quoting currency
+ *   US     → USD ledger, crypto excluded
+ *   IN     → everything left (the INR ledger)
+ *   'all'  → all trades together
+ */
+export const MONTHLY_REGIONS = ['all', 'IN', 'US', 'CRYPTO'];
+
+/** Exactly-one-bucket partition: crypto by market, then by currency. */
+function tradeInRegion(trade, region) {
+  if (region === 'all') return true;
+  if (trade?.market === 'crypto') return region === 'CRYPTO';
+  if (trade?.currency === 'USD') return region === 'US';
+  return region === 'IN';
+}
+
+export function monthlyBreakdown(trades, region = 'all') {
+  const all = Array.isArray(trades) ? trades : [];
+  const months = new Map();
+
+  for (const trade of all) {
+    if (isTradeOpen(trade)) continue; // an open trade's P&L isn't realized yet
+    if (!tradeInRegion(trade, region)) continue;
+    const key = monthKeyOf(trade?.exitDate);
+    if (!key) continue; // a closed trade without a usable exit month can't be placed
+
+    let bucket = months.get(key);
+    if (!bucket) {
+      bucket = {
+        key,
+        label: monthLabelOf(key),
+        closed: 0,
+        wins: 0,
+        losses: 0,
+        netPnl: { INR: 0, USD: 0 },
+        currencies: [],
+        trades: [],
+      };
+      months.set(key, bucket);
+    }
+
+    bucket.closed += 1;
+    bucket.trades.push(trade);
+    const currency = trade?.currency === 'USD' ? 'USD' : 'INR';
+    if (!bucket.currencies.includes(currency)) bucket.currencies.push(currency);
+    const net = isFiniteNumber(trade?.netPnl) ? trade.netPnl : tradeNetPnl(trade);
+    bucket.netPnl[currency] = round2(bucket.netPnl[currency] + net);
+    if (net > 0) bucket.wins += 1;
+    else if (net < 0) bucket.losses += 1;
+  }
+
+  return [...months.values()].sort((a, b) => b.key.localeCompare(a.key));
+}
+
+/** '2026-09-14' → '2026-09'; null for anything non-month-shaped. */
+function monthKeyOf(iso) {
+  if (typeof iso !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(iso.trim());
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  return `${match[1]}-${match[2]}`;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** '2026-09' → 'Sep 2026' (input already validated by monthKeyOf). */
+function monthLabelOf(key) {
+  const [year, month] = key.split('-').map(Number);
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}

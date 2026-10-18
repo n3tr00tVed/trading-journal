@@ -12,6 +12,15 @@
  *    first and cached in localStorage for 10 minutes so reopening the tab
  *    doesn't re-hit the relay. Failures are reported per source, never
  *    papered over with fake items.
+ *  - IP visibility, stated plainly: publisher hosts never see the user's
+ *    IP (the relay does the fetching for them). The relay services DO see
+ *    the requesting IP — that is inherent to any server that serves you.
+ *    The app minimizes that exposure: a 10-minute cache plus per-feed
+ *    "path pinning" — each feed remembers the one fetch path that worked
+ *    last time and tries it alone first, so repeat refreshes put ONE known
+ *    third party per feed in the loop instead of spraying every relay.
+ *    Hiding the IP from the relays themselves needs a VPN/Tor, which is a
+ *    system-level concern no page can do for its own requests.
  */
 
 const RELAY = 'https://api.allorigins.win/raw?url=';
@@ -206,13 +215,21 @@ export function classifySentiment(text) {
 /**
  * Aggregate headline sentiment per region the news page covers.
  * Returns { all, IN, US, CRYPTO } where each is
- *   { total, bullish, bearish, neutral, tone, label }
+ *   { total, bullish, bearish, neutral, tone, label, direction, forecast }
  *
  * tone is the aggregate verdict: the side with more classified headlines
  * wins, and a tie (or an all-neutral feed) is neutral. With fewer than
  * MIN_SENTIMENT_SAMPLE classified headlines the verdict is withheld as
  * 'mixed' — two headlines are gossip, not a trend — so the label stays
  * honest about what the data supports.
+ *
+ * forecast frames the tone as the forward-looking read the user asked for:
+ * what the current headline mood implies for the market next —
+ *   bullish  → 'Market may rise'  (direction 'up')
+ *   bearish  → 'Market may fall'  (direction 'down')
+ *   mixed    → 'Direction unclear'
+ *   neutral  → 'No directional cue'
+ * It is a mood-read of today's headlines, never a trading signal.
  */
 export const MIN_SENTIMENT_SAMPLE = 3;
 
@@ -238,15 +255,15 @@ export function overallSentiment(items = []) {
   const verdict = (counts) => {
     const classified = counts.bullish + counts.bearish;
     if (classified >= MIN_SENTIMENT_SAMPLE && counts.bullish > counts.bearish) {
-      return { tone: 'bullish', label: 'Likely bullish' };
+      return { tone: 'bullish', label: 'Likely bullish', direction: 'up', forecast: 'Market may rise' };
     }
     if (classified >= MIN_SENTIMENT_SAMPLE && counts.bearish > counts.bullish) {
-      return { tone: 'bearish', label: 'Likely bearish' };
+      return { tone: 'bearish', label: 'Likely bearish', direction: 'down', forecast: 'Market may fall' };
     }
     if (classified > 0) {
-      return { tone: 'mixed', label: 'Mixed signals' };
+      return { tone: 'mixed', label: 'Mixed signals', direction: null, forecast: 'Direction unclear' };
     }
-    return { tone: 'neutral', label: 'No clear signals' };
+    return { tone: 'neutral', label: 'No clear signals', direction: null, forecast: 'No directional cue' };
   };
 
   return Object.fromEntries(
@@ -306,13 +323,18 @@ function itemsFromRss2Json(data, source) {
     if (!title || !link || seen.has(link)) continue;
     seen.add(link);
     const parsedDate = publishedDate((raw.pubDate ?? '').trim());
+    const summary = stripTags(raw.description ?? '').slice(0, 220);
     items.push({
       title,
       link,
       source: source.label,
       region: source.region,
       publishedAt: parsedDate ? parsedDate.toISOString() : null,
-      summary: stripTags(raw.description ?? '').slice(0, 220),
+      summary,
+      // Classify on this path too: rss2json is the primary fetch route, and
+      // an item without a sentiment field tallies as neutral — omitting this
+      // used to starve the per-market verdicts entirely on that route.
+      sentiment: classifySentiment(`${title} ${summary}`),
     });
   }
   return items;
@@ -321,35 +343,105 @@ function itemsFromRss2Json(data, source) {
 /**
  * One source = several fetch attempts. First path that yields ≥1 item
  * wins; exhausting all of them throws the honest error.
+ *
+ * Exposure control: the winning path is remembered per feed ("pin"), and
+ * later refreshes try the pinned path alone before the full chain — a
+ * repeat refresh then contacts one known relay per feed instead of every
+ * relay. A stale pin (relay went down) just falls through to the full
+ * chain, same behavior as before.
  */
+
+const FETCH_PATH_IDS = ['rss2json', 'allorigins', 'codetabs'];
+const PATH_PIN_KEY = 'trading-journal:news:fetch-paths:v1';
+
+const pathPins = new Map();
+
+(function initPathPins() {
+  if (typeof window === 'undefined') return;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PATH_PIN_KEY) ?? '{}');
+    for (const [feedUrl, pathId] of Object.entries(parsed)) {
+      if (FETCH_PATH_IDS.includes(pathId)) pathPins.set(feedUrl, pathId);
+    }
+  } catch {
+    // Unparsable pins are discarded silently — the full chain still works.
+  }
+})();
+
+function savePathPins() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PATH_PIN_KEY, JSON.stringify(Object.fromEntries(pathPins)));
+  } catch {
+    // Storage full / private mode: pins are a courtesy, drop silently.
+  }
+}
+
+function notePathPin(feedUrl, pathId) {
+  if (pathPins.get(feedUrl) === pathId) return;
+  pathPins.set(feedUrl, pathId);
+  savePathPins();
+}
+
+function forgetPathPin(feedUrl) {
+  if (pathPins.delete(feedUrl)) savePathPins();
+}
+
+/** Try ONE path end-to-end; returns items or null when the path yields nothing usable. */
+async function tryFetchPath(pathId, source) {
+  let url;
+  if (pathId === 'rss2json') {
+    url = `${RSS2JSON_ENDPOINT}${encodeURIComponent(source.url)}`;
+  } else {
+    const relay = XML_RELAYS.find((candidate) => candidate.id === pathId);
+    if (!relay) return null;
+    url = relay.url(source.url);
+  }
+  const response = await fetchWithTimeout(url);
+  if (!response.ok) return null;
+
+  if (pathId === 'rss2json') {
+    const data = await response.json();
+    const items = itemsFromRss2Json(data, source);
+    return items.length > 0 ? items : null;
+  }
+  const text = await response.text();
+  const items = parseFeedXml(text, { sourceLabel: source.label, region: source.region });
+  return items.length > 0 ? items : null;
+}
+
 async function fetchSourceItems(source) {
   if (typeof fetch !== 'function') throw new Error('unreachable (all relays)');
 
-  // 1) rss2json (CORS-native; no relay in between).
-  try {
-    const response = await fetchWithTimeout(`${RSS2JSON_ENDPOINT}${encodeURIComponent(source.url)}`);
-    if (response.ok) {
-      const data = await response.json();
-      const items = itemsFromRss2Json(data, source);
-      if (items.length > 0) return items;
-    }
-  } catch {
-    // Non-JSON error page, rate limit, timeout → try the XML relays.
-  }
-
-  // 2) Raw XML through the public relays, in order.
-  for (const relay of XML_RELAYS) {
+  // 0) The pinned path from a previous successful refresh, tried alone.
+  const pinned = pathPins.get(source.url);
+  if (pinned) {
     try {
-      const response = await fetchWithTimeout(relay.url(source.url));
-      if (!response.ok) continue;
-      const text = await response.text();
-      const items = parseFeedXml(text, { sourceLabel: source.label, region: source.region });
-      if (items.length > 0) return items;
+      const items = await tryFetchPath(pinned, source);
+      if (items) return items;
     } catch {
-      // next relay
+      // Stale pin (relay error / timeout) → fall through to the full chain.
     }
   }
 
+  // 1) Full chain, first path that serves ≥1 item wins and gets pinned.
+  for (const pathId of FETCH_PATH_IDS) {
+    if (pathId === pinned) continue; // already tried above and failed
+    try {
+      const items = await tryFetchPath(pathId, source);
+      if (items) {
+        notePathPin(source.url, pathId);
+        return items;
+      }
+    } catch {
+      // Bad payload, rate limit, timeout → next path.
+    }
+  }
+
+  // Every path exhausted: this feed is unreachable right now. If a stale
+  // pin just burned an attempt for nothing, drop it so the next refresh
+  // starts clean with the full chain.
+  if (pinned) forgetPathPin(source.url);
   throw new Error('unreachable (all relays)');
 }
 

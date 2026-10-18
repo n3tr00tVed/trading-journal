@@ -1069,6 +1069,119 @@ button {
   color: var(--muted);
 }
 
+.news-sentiment-forecast {
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.news-sentiment-card.sentiment-bullish .news-sentiment-forecast {
+  color: var(--pos, #22c55e);
+}
+
+.news-sentiment-card.sentiment-bearish .news-sentiment-forecast {
+  color: var(--neg, #ef4444);
+}
+
+.news-sentiment-card.sentiment-mixed .news-sentiment-forecast,
+.news-sentiment-card.sentiment-neutral .news-sentiment-forecast {
+  color: var(--muted);
+}
+
+/* ---- Monthly review (Dashboard) ---- */
+
+.month-net {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.month-bar {
+  width: 88px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.month-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.month-bar-pos {
+  background: var(--pos, #22c55e);
+}
+
+.month-bar-neg {
+  background: var(--neg, #ef4444);
+}
+
+.month-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.month-expander {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.month-expander:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.month-caret {
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  font-size: 11px;
+}
+
+.month-caret.open {
+  transform: rotate(90deg);
+}
+
+.month-row .month-sub {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.month-detail > td {
+  padding: 0 12px 12px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.month-trades .trades-table {
+  margin: 0;
+}
+
+.month-trades .trades-table thead {
+  display: none;
+}
+
+.month-trades .trades-table tbody tr + tr {
+  border-top: 0;
+}
+
+.section-note {
+  margin: 4px 0 0;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ---- Live crypto prices (open positions) ---- */
 
 .live-status {

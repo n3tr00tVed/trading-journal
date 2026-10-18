@@ -34,6 +34,7 @@ import { useCurrency } from '../hooks/useCurrency.js';
 import StatCard from './StatCard.jsx';
 import EmptyState from './EmptyState.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
+import MonthlyReview from './MonthlyReview.jsx';
 // Single stylesheet import for the whole component tree I own.
 import '../styles/app.css';
 
@@ -220,6 +221,9 @@ export default function Dashboard({
         />
         {capitalCard}
       </div>
+
+      {/* ---- Monthly review (trades taken per month + that cohort's net P&L) ---- */}
+      {hasTrades && <MonthlyReview trades={trades} />}
 
       {/* ---- Empty dataset ---- */}
       {!hasTrades && (

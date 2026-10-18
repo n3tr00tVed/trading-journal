@@ -36,7 +36,11 @@ function NewsCard({ item }) {
   const sentimentBadge = item?.sentiment && item.sentiment !== 'neutral' ? (
     <span
       className={`badge ${item.sentiment === 'bullish' ? 'badge-bullish' : 'badge-bearish'}`}
-      title={`Headline reads ${item.sentiment} (keyword analysis, informational only)`}
+      title={
+        item.sentiment === 'bullish'
+          ? 'Headline reads bullish — news like this may lift the market (keyword analysis, informational only)'
+          : 'Headline reads bearish — news like this may press the market down (keyword analysis, informational only)'
+      }
     >
       {item.sentiment === 'bullish' ? '↑ Bullish' : '↓ Bearish'}
     </span>
@@ -114,12 +118,15 @@ function SentimentSummary({ summary }) {
         const s = summary[key];
         if (!s) return null;
         return (
-          <div className={`news-sentiment-card card sentiment-${s.tone}`} key={key}>
+          <div className={`news-sentiment-card card sentiment-${s.tone}`} key={key} title="Keyword tally over the latest headlines — informational mood-read, never a trading signal">
             <span className="news-sentiment-market">
               {key === 'all' ? '🌐 All markets' : NEWS_REGION_LABELS[key]}
             </span>
             <span className={`badge ${toneClass[s.tone]}`} role="status">
               {s.label}
+            </span>
+            <span className="news-sentiment-forecast">
+              {s.forecast}
             </span>
             <span className={`news-sentiment-counts mono ${toneDot[s.tone]}`}>
               ↑ {s.bullish} · ↓ {s.bearish} · {s.neutral} neutral
@@ -263,8 +270,11 @@ export default function NewsPage() {
       )}
 
       <p className="news-foot page-sub">
-        Read-only headlines from publisher RSS ({sourceCount} feeds). Fetching goes out through a public relay —
-        the request contains no personal data, and nothing from the news pages is stored with your journal.
+        Read-only headlines from publisher RSS ({sourceCount} feeds). Publisher sites never see your
+        IP — a public relay fetches the feed for you; the relay service itself sees the requesting IP,
+        which no page can prevent. Exposure is kept minimal: headlines cache for 10 minutes, and each
+        feed reuses the one relay that worked for it last time. Nothing from these pages is stored
+        with your journal.
       </p>
     </div>
   );
