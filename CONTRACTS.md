@@ -56,6 +56,8 @@ authoritative conventions doc.)
 - **Currency tagging**: trades carry a native `currency` tag of their market. New trades are tagged with the market you're viewing at save time (`App.saveTradeWithScreenshot`); edited trades keep their tag **unless the `market` field changes** — fixing the wrong market re-tags the profit to that market. Every money cell in the tables renders in `trade.currency` row by row.
 - `filterTrades(trades, { query, symbol, direction, strategy, market?, currency?, dateFrom, dateTo, status })` — all optional; `currency` in `all|INR|USD`; `status` in `all|open|closed`; `query` matches symbol/strategy/setup/notes case-insensitively; date strings compare lexicographically (valid `YYYY-MM-DD`).
 - `sortTrades(trades, key, dir)` — keys `entryDate|exitDate|netPnl|symbol` default `entryDate` desc (chronological, newest first for table display). Stable, does not mutate input.
+- **Crypto swap exit pricing** `swapExitPrice(quantitySold, receivedQuantity, receivedPrice)` → `(receivedQuantity × receivedPrice) ÷ quantitySold`, rounded to 2dp; `null` when any input isn't a positive finite number. Pure core of the crypto-only swap helper in `TradeForm.jsx`: a swap (BTC → SOL) has no fiat step, so the trade's exit side derives from the coins received and every existing P&L rule keeps working. The UI fills `exitPrice` from it, closes the trade (`isOpen: false`; `exitDate` defaults to today unless already set) and records `"Swap: X FROM → Y TO @ price…"` in Notes — no schema change, and the result is reviewed + validated like any close before saving. The received coin's price may be auto-fetched from Binance (USD; for ₹-tagged trades the user supplies their own USD→INR rate).
+- **Monthly P&L statement** `monthlyBreakdown(trades, region = 'all')` → rows keyed on the **close month** of `exitDate`, newest first: `{ key: '2026-09', label: 'Sep 2026', closed, wins, losses, breakeven, netPnl: { INR, USD }, currencies: ['USD', …], trades: Trade[] }` — `trades` holds references to the original records so the UI can expand a month into every trade realized in it. Rules: open trades contribute nothing until they close; currencies are NEVER summed inside a row — `netPnl` carries separate `INR`/`USD` buckets and `currencies` lists every ledger the month touched (even a flat one); a closed trade with an unparsable `exitDate` is skipped, not fabricated. `region` scopes the statement via `MONTHLY_REGIONS = ['all', 'IN', 'US', 'CRYPTO', 'FOREX']` and the exactly-one-bucket `tradeInRegion` partition — **market decides first** (crypto → CRYPTO, forex → FOREX, whatever their quoting currency), **then currency** (USD → US, everything else → IN) — so no trade is ever counted in two regions and monthly numbers never drift from the stats above.
 
 ## Formatting (`src/lib/format.js`)
 
@@ -103,7 +105,8 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
 
 ## Live crypto prices (`src/lib/marketData.js` + `src/hooks/useLivePrices.js`)
 
-- The app's ONLY network feature, and strictly read-only: open crypto
+- Strictly read-only, the honesty template every network feature copies:
+  open crypto
   positions are quoted from Binance's public `/api/v3/ticker/price` (no
   key, no auth). Requests carry nothing but the symbols; responses are
   price numbers kept in memory only — never persisted, never exported,
@@ -128,6 +131,58 @@ State-based routing on `view`: `dashboard | trades | settings` + modal `editing:
   (`trading-journal:settings:v1` → `livePrices`, default true, checkbox
   in Settings). First tick is immediate so P&L appears within seconds of
   page load.
+
+## Live NSE quotes (`src/lib/marketData.js` + `src/hooks/useIndianPrices.js`)
+
+- Same honesty rules as Binance: read-only public data, no keys, memory
+  only — never persisted, never exported, never synced to `trades_data`.
+  Browsers cannot call Yahoo's chart API directly (no CORS), so requests go
+  through the public relays the news page uses (AllOrigins → CodeTabs);
+  nothing but the symbol URL is sent either way.
+- `toYahooSymbol`: `RELIANCE` → `RELIANCE.NS` (NSE); explicit `.NS`/`.BO`
+  pass through; unusable symbols → `null`.
+- `isNseMarketOpenNow(date)` — Mon–Fri 09:15–15:30 IST computed via `Intl`
+  (no timezone libraries); an unusable clock answers "closed", the honest
+  default.
+- `fetchIndianPrices(journalSymbols)` → `{ prices, errors }` keyed by the
+  JOURNAL symbol: `prices[sym] = { price, asOf }`, `errors[sym] = 'offline'
+  | 'no quote' | 'throttled'` (HTTP 429/401/403 → `throttled`). Each symbol
+  walks the relay list independently, so one rate-limited relay never blinds
+  the rest, and a failed fetch surfaces honestly — never a fabricated price.
+- Polling (`useIndianPrices`): 60s interval (the relayed endpoint throttle
+  is harsher than Binance's and equities are a slow market), only for OPEN
+  `market: 'stocks'` + `currency: 'INR'` positions, and only while
+  `isNseMarketOpenNow()` — outside NSE hours the hook requests nothing and
+  reports status `'closed'` ("NSE closed — quotes resume 9:15 IST").
+  Toggle `indianLivePrices` in `trading-journal:settings:v1` (default true,
+  checkbox in Settings). Futures/options/forex get no live feed on purpose —
+  their rows show "manual".
+
+## News + sentiment (`src/lib/news.js` + `src/components/NewsPage.jsx`)
+
+- Regions `NEWS_REGIONS = ['all', 'IN', 'US', 'CRYPTO', 'FOREX']` with
+  publisher RSS feeds per region (Economic Times, CNBC, CoinDesk, Google
+  News topics incl. a forex/currency topic). Each headline carries
+  `region`, `sentiment` ('bullish' | 'bearish' | 'neutral' | null) and
+  `forecast` ('up' | 'down' | null wording of the overall verdict).
+- Fetch chain per feed: rss2json → AllOrigins → CodeTabs
+  (`FETCH_TIMEOUT_MS = 15000`). Whichever path succeeds is **pinned**
+  (localStorage `trading-journal:news:fetch-paths:v1`; path ids listed in
+  `FETCH_PATH_IDS`) and tried alone first on the next refresh — fewer
+  relays see a repeated client (IP minimization; relays still necessarily
+  see the IP, publishers don't). A stale pin is dropped only after an
+  all-paths failure. Item cache `trading-journal:news:cache:v1` with a
+  10-minute TTL. Failures are named per feed with a Retry — never faked.
+- `overallSentiment(items)` → per-region tally
+  `{ total, bullish, bearish, neutral, tone, label, direction, forecast }`
+  for all five region keys, with `MIN_SENTIMENT_SAMPLE = 3` (at least three
+  classified headlines before a directional verdict is allowed — two are
+  gossip, not a trend). `forecast` is the plain-English forward framing:
+  'Market may rise' | 'Market may fall' | 'Direction unclear' |
+  'No directional cue'; `tone`/`label` (Likely bullish/bearish, Mixed,
+  No clear) are kept for compatibility. Sample counts are always rendered
+  so a verdict's basis is visible. Informational mood-reading, never a
+  trading signal.
 
 ## Position-size calculator (`src/lib/calculator.js` + `CalculatorPage`)
 

@@ -719,6 +719,97 @@ button {
   }
 }
 
+/* ---- Phones: safe, tappable, scroll-where-it-matters ---- */
+
+@media (max-width: 560px) {
+  .sidebar {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  /* Six nav buttons + currency switch don't fit a 360px row: one
+     horizontally scrubbable rail instead of a crushing wrap. */
+  .nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    width: 100%;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-btn {
+    width: auto;
+    flex: none;
+    padding: 9px 12px;
+  }
+
+  .nav-badge {
+    display: none; /* counts live in dashboards; the rail stays lean */
+  }
+
+  .main {
+    padding: var(--space-4) 12px 28px;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .section-header {
+    flex-wrap: wrap;
+  }
+
+  /* Wide tables scroll horizontally instead of compressing into mush. */
+  .trades-table {
+    min-width: 640px;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .toast {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    text-align: center;
+  }
+
+  .modal-body {
+    padding: 16px 14px 20px;
+  }
+
+  .modal-header {
+    padding: 12px 14px;
+  }
+
+  .news-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .news-chips {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .news-chips::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .checkbox-label {
   display: flex;
   flex-direction: row;

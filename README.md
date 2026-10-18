@@ -42,28 +42,53 @@ browser unless you explicitly allow it.
 - **Honest math** — win/loss classification uses **net** P&L (fees included);
   open trades contribute zero to realized stats and are shown separately.
   All figures derive from the records — no stored status flags to drift.
+- **Monthly P&L review** — a month-wise statement grouped by the month each
+  trade **closed** (exitDate), expandable to every trade realized in that
+  month, with region chips: 🌐 All · 🇮🇳 India · 🇺🇸 US · 🪙 Crypto · 💱
+  Forex. A trade belongs to exactly one region, rupees and dollars never
+  merge, and open positions join the statement only once they actually close.
 - **Position size calculator** — capital + risk % + entry/stop → shares or
   whole F&O lots, capped by both risk and affordability. NSE/BSE/MCX lot
   sizes auto-fill (NIFTY 75, BANKNIFTY 35, GOLD 100 …).
 
 ### Market news + sentiment
-- **Headlines** from publisher RSS feeds for 🇮🇳 India, 🇺🇸 US, and 🪙
-  crypto (Economic Times, CNBC, CoinDesk + Google News topic feeds).
+- **Headlines** from publisher RSS feeds for 🇮🇳 India, 🇺🇸 US, 🪙 crypto, and
+  💱 forex (Economic Times, CNBC, CoinDesk + Google News topic feeds).
 - **Per-headline sentiment** — keyword analysis marks bullish/bearish reads
   (word-boundary matching, so "update" doesn't count as "up").
-- **Overall verdict per market** — an India / US / crypto / combined summary:
-  *Likely bullish*, *Likely bearish*, **Mixed signals** or *No clear signals*,
-  with the ↑/↓ tally shown so you can see the basis. Verdicts need at least 3
-  directional headlines — two headlines are gossip, not a trend. Sentiment is
-  informational mood-reading, never a trading signal.
+- **Overall verdict per market** — an India / US / crypto / forex / combined
+  summary with a forward framing: *Likely bullish — market may rise*,
+  *Likely bearish — market may fall*, *Mixed signals — direction unclear* or
+  *No clear signals*, with the ↑/↓ tally shown so you can see the basis.
+  Verdicts need at least 3 directional headlines — two headlines are gossip,
+  not a trend. Sentiment is informational mood-reading, never a trading signal.
 - 10-minute cache for polite re-opens; failed feeds are listed by name with a
   retry — nothing is faked.
+- **IP-minimizing fetches** — whichever public relay (rss2json / AllOrigins /
+  CodeTabs) succeeds for a feed is remembered and then tried alone first, so
+  refreshes contact one known service instead of spraying all three every
+  time. Publisher sites never see your IP; relays necessarily do, and
+  VPN/Tor remains a system-level option if you want more.
 
 ### Live data & privacy
 - **Live crypto P&L** — optional 10-second quotes from Binance's free public
   price API for open crypto positions only; unrealized P&L (+% on margin) and
   an honest status line. Quotes stay in memory, never stored or synced.
-  Stock/futures/forex positions show "manual" — no fabricated prices.
+- **Live NSE quotes** — open Indian stock positions (₹ ledger) quote every
+  ~60 s through the news page's public relays (Yahoo's public chart API in
+  between), and only during NSE trading hours (Mon–Fri 09:15–15:30 IST) —
+  outside those hours the row honestly shows "manual". Futures, options, and
+  forex have no free browser-friendly feed and stay manual: never a
+  fabricated price.
+- **Crypto swap helper** — in the trade form, crypto only: logging a swap
+  (e.g. BTC → SOL) computes the exit price from the received side
+  (received qty × received price ÷ qty sold), optionally auto-fetching the
+  received coin's price from Binance (with your own USD→INR rate for ₹
+  trades). Applying closes the trade, stamps the exit date, and records the
+  swap in Notes — reviewed and validated like any trade.
+- **Mobile-friendly** — responsive layout: the sidebar becomes a swipeable
+  top rail on phones, wide tables scroll instead of crushing, form rows
+  stack, and dialogs/toasts go full-width.
 - **Folder sync (`trades_data/`)** — optional local mirror of the journal to
   a folder you pick once (trades.json, rules.txt, capital.json). Chromium
   browsers only. Restore from the folder is a guarded confirm.
@@ -71,9 +96,9 @@ browser unless you explicitly allow it.
   browser localStorage; screenshots in IndexedDB; the optional
   `trades_data/` mirror on your disk. Exports (CSV/JSON) download to your
   Downloads folder. Nothing is uploaded anywhere.
-- **Network activity is read-only and opt-out-able**: Binance quotes
-  (toggle in Settings) and news feed fetches via public CORS relays. No
-  credentials, no telemetry.
+- **Network activity is read-only and opt-out-able**: Binance quotes, NSE
+  stock quotes, and news feed fetches via public CORS relays (each with a
+  toggle in Settings). No credentials, no telemetry.
 
 ## Getting started
 
@@ -113,15 +138,19 @@ live in [`CONTRACTS.md`](CONTRACTS.md).
 
 ```
 src/
-  lib/           pure logic — schema + validation, calculations, storage,
-                 formatting, export/import, Binance quotes, news feeds,
-                 folder sync, screenshots, settings/capital/rules storage
-  hooks/         useTrades (journal state + persistence), useLivePrices,
-                 useCurrency
-  components/    sidebar, dashboard, trade table + form, settings, rules,
-                 news, calculator
-  tests/         vitest unit + integration tests (150 tests)
+  lib/           pure logic — schema + validation, calculations (incl. monthly
+                 breakdown & swap pricing), storage, formatting,
+                 export/import, Binance + NSE quotes, news feeds, folder
+                 sync, screenshots, settings/capital/rules storage
+  hooks/         useTrades (journal state + persistence), useLivePrices
+                 (Binance), useIndianPrices (NSE via relay), useCurrency
+  components/    sidebar, dashboard, monthly review, trade table + form
+                 (with crypto swap helper), settings, rules, news, calculator
+  tests/         vitest unit + integration tests (168 tests)
 ```
+
+The whole build — stack, data flow, every feature, the privacy model — is
+explained in plain English in [`flow.txt`](flow.txt).
 
 ## Browser support
 

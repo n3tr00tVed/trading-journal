@@ -1,0 +1,283 @@
+================================================================================
+TRADING JOURNAL — HOW IT IS BUILT
+A plain-English explainer of the whole app: what it does, what it is made of,
+how data flows, and how every feature works. Written for someone who has never
+touched this tech stack.
+================================================================================
+
+1. WHAT THIS APP IS
+--------------------------------------------------------------------------------
+A personal trading journal that runs entirely on YOUR device. You enter trades
+(stocks, futures, options, forex, crypto — INR or USD), and the app computes
+your P&L, win rate, monthly statements, and shows live prices and market news.
+It behaves like a website you open in a browser, but:
+
+  * there is NO server, NO login, NO database anywhere,
+  * your journal lives in your own browser's storage,
+  * nothing leaves your device except public quotes and news headlines,
+  * deleting the browser data deletes the journal (by design; there is also
+    an optional backup-to-folder feature).
+
+Because it needs no server, "installing" it for someone = giving them the
+code files; they run it with two commands (below).
+
+2. TECH STACK (the "ingredients")
+--------------------------------------------------------------------------------
+Language:        JavaScript (modern version, ES modules — files import each
+                 other with `import/export`; no babel trickery needed).
+UI library:      React 19. React builds the screen out of small reusable
+                 "components" (Sidebar, Dashboard, TradeForm …). Each
+                 component is a function that returns HTML-like markup (JSX).
+Dev tooling:     Vite. Vite is what makes `npm run dev` work — it serves the
+                 app locally with instant reload, and `npm run build` bundles
+                 the code into static files (dist/) that can be hosted anywhere.
+Styles:          One hand-written CSS file (src/styles/app.css). No CSS
+                 framework. Responsive breakpoints for mobile are at the
+                 bottom of that file.
+Testing:         Vitest + React Testing Library (jsdom). "jsdom" fakes a
+                 browser inside the test runner so components can be tested
+                 without opening a real browser.
+Code quality:    ESLint (`npm run lint`).
+Package manager: npm — package.json + package-lock.json record exactly which
+                 libraries (with versions) the project uses; `npm install`
+                 recreates node_modules/ from them.
+
+There is deliberately NO backend, NO TypeScript, NO CSS-in-JS, NO state
+library. Plain React + plain JS keeps a single-developer local app simple.
+
+3. HOW TO RUN IT
+--------------------------------------------------------------------------------
+    npm install        # one time: downloads libraries into node_modules/
+    npm run dev        # starts a local server, usually http://localhost:5173
+    npm run test       # runs the 168 automated tests
+    npm run lint       # checks code style/rules
+    npm run build      # produces the deployable bundle in dist/
+
+"npm" comes with Node.js (install Node 18+ from nodejs.org).
+
+4. THE FILE MAP (what every part does)
+--------------------------------------------------------------------------------
+index.html                  the single page the browser loads; it has one
+                            empty <div id="root"> and React fills it
+vite.config.js              dev-server + test-runner configuration
+src/main.jsx                boot-straps React into #root
+src/App.jsx                 the "conductor": decides which page you see,
+                            owns shared state (trades, currency, prices,
+                            dialogs) and passes it down as props
+src/styles/app.css          ALL styling; mobile rules live in the last
+                            @media blocks
+
+  src/components/  — the visible pieces (all JSX):
+    Sidebar.jsx        left menu + India/US currency switch
+    Dashboard.jsx      stat cards, recent trades, open positions table
+    MonthlyReview.jsx  month-wise P&L statement, expandable per month
+    TradesPage.jsx     the full journal page (filters + table)
+    TradesTable.jsx    the trades spreadsheet + Edit/Delete + net P&L cells
+    TradeForm.jsx      add/edit trade form; ALSO the crypto swap helper
+    NewsPage.jsx       headline cards + per-market sentiment verdicts
+    RulesPage.jsx      your private rules text (autosaved)
+    CalculatorPage.jsx position-size calculator with F&O lot sizes
+    SettingsPage.jsx   exports/imports, folder sync, caps, price toggles
+    StatCard.jsx       one dashboard card (label + value + tone color)
+    Modal.jsx          the popup window used by the trade form
+    ConfirmDialog.jsx  the "are you sure?" dialog for destructive actions
+    EmptyState.jsx     friendly "nothing here yet" blocks
+    MonthlyReview.jsx  see Dashboard
+
+  src/hooks/  — the "wiring" that keeps a component's data alive:
+    useTrades.js       the journal's data manager: add/update/delete trades,
+                       persistence to localStorage, corrupted-data recovery,
+                       and the guard that closed trades may only be edited
+                       after an explicit unlock
+    useLivePrices.js   polls Binance public API (~10s) for OPEN crypto
+                       positions; memory-only; pauses when tab hidden
+    useIndianPrices.js polls NSE stock quotes (~60s) via a public relay; only
+                       during NSE hours (Mon–Fri 09:15–15:30 IST)
+    useCurrency.js     shares the active ₹/$ view across components (a React
+                       "context")
+
+  src/lib/  — the brains: pure functions with NO React inside, fully testable:
+    schema.js          the trade record definition + normalizer + validator
+                       (fields: symbol, market, direction, entryPrice,
+                       exitPrice(null = open), quantity, invested, leverage,
+                       takeProfit, stopLoss, currency, dates, fees, …)
+    calculations.js    ALL money math: gross/net P&L, invested, ROI,
+                       unrealized P&L, TP/SL distance & hit checks,
+                       per-currency breakdown, filters, sorting,
+                       monthlyBreakdown (the monthly P&L statement) and
+                       swapExitPrice (crypto swap exit pricing)
+    format.js          display helpers: ₹1,23,456 style INR, dates, %, etc.
+    storage.js         loads/saves the WHOLE journal to localStorage
+                       (key: trading-journal:trades:v1) with corruption care
+    settingsStorage.js tiny store for preferences: currency, live-price
+                       toggles
+    capitalStorage.js  per-market account capital (₹ / $)
+    rulesStorage.js    rules page text
+    marketData.js      network quoting: fetchCryptoPrices (Binance) and
+                       fetchIndianPrices (Yahoo chart API through public
+                       CORS relays) + NSE-hours calendar
+    news.js            the news system: curated publisher RSS feeds, a
+                       3-path fetch chain (rss2json → AllOrigins → CodeTabs),
+                       per-feed "path pinning", 10-minute cache, keyword
+                       sentiment classifier, and overallSentiment(...) which
+                       produces per-market verdicts with forecasts
+                       ("Market may rise" / "Market may fall") 
+    export.js          CSV/JSON exports and import/merge helpers
+    fileSync.js        optional backup folder: mirrors the journal into a
+                       folder you pick (trades_data/trades.json etc.) using
+                       the browser's File System Access API — Chromium only
+    screenshots.js     per-trade chart images stored in IndexedDB (≤5 MB);
+                       excluded from exports/sync BY DESIGN
+    calculator.js      position sizing math
+    lotSizes.js        table of NSE/BSE/MCX lot sizes for the calculator
+
+  src/tests/  — 168 automated tests (vitest). Pure-lib tests live next to
+  component/integration tests. They cover: money math, schema validation,
+  persistence recovery, CSV/JSON export-import, the news pipeline incl.
+  failures, sentiment + forecasts, relay pinning, monthly breakdown with
+  regions, Binance and NSE quote handling, and user-flow tests that click
+  through the real components.
+
+5. HOW DATA FLOWS (the "plumbing" in one picture)
+--------------------------------------------------------------------------------
+    TradeForm (typing) ──values──▶ validateTrade()  ──▶ useTrades.addTrade()
+                                                            │
+                                                            ▼
+                                          localStorage  (trades:v1)
+                                                            │
+                                        ┌───────────────────┼───────────┐
+                                        ▼                   ▼           ▼
+                               computeStats()      monthlyBreakdown  TradesTable
+                                    │                                     │
+                                    ▼                                     ▼
+                              Dashboard cards                       sheet of rows
+
+  * Every money figure is DERIVED from the trade records at render time —
+    nothing like "total profit" is ever stored, so stored data cannot drift
+    out of sync with the math.
+  * "Open trade" means exitPrice === null; open trades contribute ZERO to
+    all realized stats but appear in their own places.
+  * Net P&L always subtracts fees. Win/loss/judgement is net-based.
+  * INR money and USD money are NEVER added together — every money total on
+    screen is per-currency, with the other ledger shown as a sub-line.
+
+6. THE MONTHLY REVIEW (how "monthy pnl" works)
+--------------------------------------------------------------------------------
+  grouped by the month each trade CLOSED (exitDate), so "Sep 2026" answers
+  "how much did I actually realize in September".
+
+  * Rows: month, trades closed, wins·losses, net P&L per currency.
+  * A small bar shows the month's size relative to the strongest month.
+  * click a month → expands to EVERY trade realized in it.
+  * Region chips: All · India · US · Crypto · Forex. A trade belongs to
+    exactly one region (crypto by market, forex by market, otherwise by
+    currency) so a trade is never counted twice, anywhere.
+  * Open positions appear in the month they eventually close; before that
+    they honestly contribute nothing.
+
+7. LIVE PRICES (crypto + Indian market)
+--------------------------------------------------------------------------------
+  CRYPTO — Binance's free public ticker API (no key). ~10s poll, OPEN crypto
+  positions only. Unrealized P&L + "% on margin" + TP/SL distance appear on
+  the position rows. Quotes are memory-only and never persisted.
+
+  INDIAN MARKETS — there is no free browser-friendly NSE feed, so the app
+  reads Yahoo's public chart endpoint THROUGH public relays (the same ones
+  the news uses). ~60s poll, NSE-equity open positions only, and ONLY during
+  NSE trading hours; outside hours it reports "NSE closed" and the row
+  honestly shows "manual". Settings has a toggle for each feed.
+
+  Both feeds share the same honesty contract: a failed fetch shows an error
+  or "manual" — the app NEVER invents a price.
+
+8. NEWS + SENTIMENT (read-only mood-reading)
+--------------------------------------------------------------------------------
+  Sources: publisher RSS (Economic Times, CNBC, CoinDesk, Google News
+  topics) for India / US / Crypto / Forex. Browsers cannot read those RSS
+  URLs directly (CORS), so each request is relayed by a public mirror:
+      1) rss2json (feed→JSON service)
+      2) AllOrigins (public CORS proxy)  — tried per feed in order
+      3) CodeTabs     (public CORS proxy)
+  Whichever path succeeds for a feed is REMEMBERED ("pinned"), so the next
+  refresh contacts one known relay instead of spraying all three — fewer
+  requests, fewer services seeing a repeated client. Results cache for
+  10 minutes; failing feeds are named honestly with a Retry button.
+
+  Sentiment: each headline is keyword-classified bullish/bearish/neutral
+  (word-boundary matching so "update" doesn't read "up"). Then
+  overallSentiment() tallies per market and emits a verdict WITH a forecast:
+      "Likely bullish — Market may rise"   (more ↑ than ↓, ≥3 classified)
+      "Likely bearish — Market may fall"
+      "Mixed signals — Direction unclear"  (or under 3 classified headlines)
+      "No clear signals — No directional cue" (all neutral feeds)
+  The counts (↑ x · ↓ y · z neutral) are always shown so the verdict's basis
+  is visible. This is informational mood-reading, never a trading signal.
+
+9. THE CRYPTO SWAP HELPER (in the trade form, crypto only)
+--------------------------------------------------------------------------------
+  A swap = exchanging one coin directly into another (BTC → SOL) with no
+  fiat step. The helper turns that movement into the trade's exit side:
+      exit price = (receivedQty × receivedPrice) ÷ quantitySold
+  It can auto-fetch the received coin's USD price from Binance (for INR-
+  tagged trades you also enter your USD→INR rate so the price is in your
+  trade's currency). "Apply" closes the trade, stamps today's exit date,
+  and records "Swap: X FROM → Y TO @ price" in the Notes. Nothing bypasses
+  validation — you review, then save like any trade.
+
+10. GUARDS (how the app protects you from data mistakes)
+--------------------------------------------------------------------------------
+  * Editing a CLOSED trade rewrites recorded history. The Edit button asks
+    "Edit closed trade? Unlock and edit" first, and the data layer ALSO
+    rejects closed-trade edits unless the form was explicitly unlocked
+    (double guard).
+  * Deleting one trade / all trades always requires a confirm dialog.
+  * Every submission passes validateTrade(); invalid numbers never enter
+    the journal.
+  * Corrupted localStorage is isolated — the journal loads without the bad
+    record and tells you instead of crashing.
+  * Folder backup RESTORE replaces everything → big red confirm.
+
+11. NETWORK & PRIVACY (exactly what goes out)
+--------------------------------------------------------------------------------
+  Outgoing network is limited to: Binance ticker quotes, NSE stock quotes
+  (Yahoo chart API via relay), and publisher RSS (via relays). All read-only,
+  all toggleable in Settings, none auth'd, none keyed. The relay services
+  see your IP (any server you fetch from does); publisher sites never do.
+  Your trades, notes, capital, rules, screenshots: never uploaded, never
+  synced to any cloud — they live in browser storage (localStorage +
+  IndexedDB) and optionally in the trades_data/ folder you point to.
+
+12. DEPLOYING / SHARING (short version)
+--------------------------------------------------------------------------------
+  * git tracks the project; push to GitHub (repo: trading-journal).
+  * `npm run build` outputs dist/ — static files hostable on GitHub Pages,
+    Netlify, Vercel, or any webserver. Visitors get THEIR OWN empty journal
+    in their own browser; private by construction.
+  * .gitignore guards personal data files (trades.json, exports) from ever
+    being committed by accident.
+  * flow.txt (this file) and CONTRACTS.md/README.md document everything.
+
+13. GLOSSARY (terms used above)
+--------------------------------------------------------------------------------
+  Component    a self-contained piece of UI (function returning markup)
+  Hook         a React primitive (useXxx...) that lets a function component
+               own state/effects; the bracket `useState`, `useEffect` calls
+  Props        the arguments passed into a component
+  State        data a component watches; changing it re-renders the screen
+  localStorage key–value storage inside the browser (~5 MB), survives reload
+  IndexedDB    the browser's larger database (used for screenshot blobs)
+  CORS         browser security rule that blocks direct cross-site reads;
+               public relays exist specifically to mirror such content
+  Relay        a public intermediary that fetches a URL for you and returns it
+  ESM          JavaScript's official module system (import/export)
+  Vitest       the test runner; describes/it/expect define and assert tests
+  jsdom        a fake browser DOM so tests can run in Node
+  Binance API  free public REST endpoint for crypto ticker prices
+  Yahoo chart  Yahoo Finance's public per-symbol price endpoint
+
+14. FILE COUNT / SCALE (for the curious)
+--------------------------------------------------------------------------------
+  ~58 tracked files, ~5800 lines of app code + styles, 168 automated tests,
+  zero runtime dependencies beyond React itself. Everything else you can
+  read: there is no magic here — the app is components + pure functions +
+  two storage APIs + a little honest networking.
