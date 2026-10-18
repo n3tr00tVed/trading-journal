@@ -6,6 +6,9 @@ market news with a per-market sentiment read — and know your stats. Everything
 is stored on your own device. No accounts, no servers, nothing leaves your
 browser unless you explicitly allow it.
 
+Built to help people (or myself) manage by their trades — knowing the stats
+behind them — and as a new project to learn a new stack.
+
 ## Features
 
 ### Journaling
